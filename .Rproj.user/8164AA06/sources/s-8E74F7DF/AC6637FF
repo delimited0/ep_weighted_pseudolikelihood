@@ -1,0 +1,27 @@
+{
+    "id": "AC6637FF",
+    "path": "~/Research/ep_weighted_pseudolik/epwpl/R/ep_wlr.R",
+    "project_path": "R/ep_wlr.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1621353324388.0,
+    "source_on_save": true,
+    "relative_order": 3,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "w2i0gs542kngx",
+        "Source": "Source",
+        "cursorPosition": "27,21",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1621655652,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1621655652378,
+    "read_only": false,
+    "read_only_alternatives": []
+}
