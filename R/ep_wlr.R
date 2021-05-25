@@ -107,8 +107,11 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
     }
     
     # optimize hyperparameters
-    mv_sites = (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v)
-    log1pvv = log(1 + (v_site2 / v_site1))
+    # mv_sites = (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v)
+    # log1pvv = log(1 + (v_site2 / v_site1))
+    tmtXy = t(m) %*% tXy
+    sigm_p_site3 = plogis(p_site3, log.p = TRUE)
+    sigm_mp_site3_dnorm = plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
     
     f <- function(params) {
       
@@ -118,24 +121,35 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
       # browser()
       
       logs1 = .5 * (
-        t(m) %*% (V_site2_inv %*% m_site2 + (tXy / sigma0^2)) -
-          n * log(2 * pi * sigma0^2) - (yty / sigma0^2) - t(m_site2) %*% V_site2_inv %*% m_site2 -
-          determinant(In + (XV_tX / sigma0^2))$modulus + 
-          sum( log1pvv + mv_sites )
+        # t(m) %*% (V_site2_inv %*% m_site2 + (tXy / sigma0^2)) -
+          tmtXy / sigma0^2 -
+          # n * log(2 * pi * sigma0^2) - 
+          n * log(sigma0^2) -
+          (yty / sigma0^2) - 
+          # t(m_site2) %*% V_site2_inv %*% m_site2 -
+          determinant(In + (XV_tX / sigma0^2))$modulus #+ 
+          # sum( log1pvv + mv_sites )
       )
+      # logc = log_sum_exp(
+      #   plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
+      #   plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+      # )
       logc = log_sum_exp(
-        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+        sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
+        sigm_mp_site3_dnorm
       )
       # browser()
-      logs2 = .5 * sum(
-        2*logc + log1pvv + mv_sites + 
-          2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
-          2*log( plogis(p_site3) * plogis(-p_site3) )
-      )
-      value = logs1 + logs2 + .5*d*log(2*pi) + 
-        .5 * sum(log(v) - mv_sites) +
-        sum( log(plogis(p_site2) * plogis(p_site3) + plogis(-p_site2) * plogis(-p_site3)))
+      # logs2 = .5 * sum(
+        # 2*logc #+ 
+          # log1pvv + mv_sites + 
+          # 2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
+          # 2*log( plogis(p_site3) * plogis(-p_site3) )
+      # )
+      logs2 = sum(logc)
+      value = logs1 + logs2 #+ 
+        # .5*d*log(2*pi) #+ 
+        # .5 * sum(log(v) - mv_sites) +
+        # sum( log(plogis(p_site2) * plogis(p_site3) + plogis(-p_site2) * plogis(-p_site3)))
       return(-value)
     }
     

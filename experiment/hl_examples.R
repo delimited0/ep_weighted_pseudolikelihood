@@ -21,7 +21,7 @@ y = rnorm(n, X %*% w, sigma_noise)
 p0 = .1
 weights = rep(1, n)
 sigma0 = sqrt(1)
-result = ep_wlr(X, y, weights, sigma0, p0, v_slab, max_iter = 2000)
+result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
 result$m
 
 # compare to mcmc

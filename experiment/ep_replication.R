@@ -3,8 +3,7 @@ library(data.table)
 
 # Parallel control --------------------------------------------------------
 
-plan(multisession, workers = 4)
-
+# plan(multisession, workers = 4)
 
 # Discrete covariate, independent ------------------------------------------------------
 set.seed(1)
@@ -59,11 +58,16 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
   # fit the n x p regression models
   regressions = lapply(1:(p+1), function(resp_index) {
     
+    print(paste0(" --- Covariate ", resp_index, " --- "))
+    
     y = data_mat[, resp_index]  
     X = data_mat[, -resp_index]
     
     # select an individual
-    incl_prob = future_sapply(1:n, function(i) {
+    incl_prob = sapply(1:n, function(i) {
+      
+      print(paste0("Individual ", i))
+      
       sq_weights = sqrt(D[i, ])
       y_weighted = y * sq_weights
       X_weighted = X * sq_weights
@@ -83,7 +87,7 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
       graph_prob = matrix(0, p+1, p+1)
       
       for(j in 1:(p+1)) {
-        graph_prob[j, -j] = regressions[[j]][i,] #Individual specific inclusion probability matrix
+        graph_prob[j, -j] = regressions[[j]][, i] #Individual specific inclusion probability matrix
       }
       
       for(i in 1:(p+1)) {
@@ -131,7 +135,8 @@ data_mat = rbind(X1, X2)
 Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
 
 tau = 1  # bandwidth
-D = matrix(1, n, n)
+
+D = matrix(1, n, n)  # weights all 1 in no covariate case
 
 # true graph
 beta = matrix(0, p+1, p+1)
@@ -153,11 +158,16 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
   # fit the n x p regression models
   regressions = lapply(1:(p+1), function(resp_index) {
     
+    print(paste0(" --- Covariate ", resp_index, " --- "))
+    
     y = data_mat[, resp_index]  
     X = data_mat[, -resp_index]
     
     # select an individual
-    incl_prob = future_sapply(1:n, function(i) {
+    incl_prob = sapply(1:n, function(i) {
+      
+      print(paste0("Individual ", i))
+      
       sq_weights = sqrt(D[i, ])
       y_weighted = y * sq_weights
       X_weighted = X * sq_weights
@@ -177,7 +187,7 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
       graph_prob = matrix(0, p+1, p+1)
       
       for(j in 1:(p+1)) {
-        graph_prob[j, -j] = regressions[[j]][i,] #Individual specific inclusion probability matrix
+        graph_prob[j, -j] = regressions[[j]][, i] #Individual specific inclusion probability matrix
       }
       
       for(i in 1:(p+1)) {
@@ -234,7 +244,6 @@ for(i in 1:n){
 }
 for(i in 1:n){
   D[, i] = n * (D[, i] / sum(D[, i])) #Scaling the weights so that they add up to n
-  # D[,i]=1 # When there is no covariate information, set the weights to be 1 throughout.
 }
 
 # true graph
@@ -257,11 +266,16 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
   # fit the n x p regression models
   regressions = lapply(1:(p+1), function(resp_index) {
     
+    print(paste0(" --- Covariate ", resp_index, " --- "))
+    
     y = data_mat[, resp_index]  
     X = data_mat[, -resp_index]
     
     # select an individual
-    incl_prob = future_sapply(1:n, function(i) {
+    incl_prob = sapply(1:n, function(i) {
+      
+      print(paste0("Individual ", i))
+      
       sq_weights = sqrt(D[i, ])
       y_weighted = y * sq_weights
       X_weighted = X * sq_weights
@@ -281,7 +295,7 @@ sim_accuracy = rbindlist(lapply(1:n_sim, function(sim_idx) {
       graph_prob = matrix(0, p+1, p+1)
       
       for(j in 1:(p+1)) {
-        graph_prob[j, -j] = regressions[[j]][i,] #Individual specific inclusion probability matrix
+        graph_prob[j, -j] = regressions[[j]][, i] #Individual specific inclusion probability matrix
       }
       
       for(i in 1:(p+1)) {
