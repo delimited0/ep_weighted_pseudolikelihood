@@ -6,20 +6,19 @@ log_sum_exp = function(u, v) {
 
 #' @param X covariate matrix (n x p)
 #' @param y response vector (n x 1)
-#' @param weights weight vector (n x 1)
 #' @param sigma0 noise standard deviation
+#' @param p0 prior inclusion probability
 #' @param v_slab slab prior variance
 #' @param v_inf infinite site variance stand in
 #' @param max_iter maximum number of iterations
 #' @param delta convergence parameter change threshold
 #' @param k damping multiplier
 #' @export
-ep_wlr = function(X, y, weights, sigma0, p0, v_slab, v_inf = 100, max_iter = 200, 
+ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200, 
                   delta = 1e-4, k = .99) {
   
   d = ncol(X)
   n = length(y)
-  Sigma = diag(weights)
   
   m = rep(0, d)
   v = rep(Inf, d)
@@ -128,6 +127,7 @@ ep_wlr = function(X, y, weights, sigma0, p0, v_slab, v_inf = 100, max_iter = 200
         plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
         plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
       )
+      # browser()
       logs2 = .5 * sum(
         2*logc + log1pvv + mv_sites + 
           2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
@@ -139,9 +139,9 @@ ep_wlr = function(X, y, weights, sigma0, p0, v_slab, v_inf = 100, max_iter = 200
       return(-value)
     }
     
-    hyper_opt = optim(c(sigma0, v_slab), f, method = "Nelder-Mead")
-    # hyper_opt = dfoptim::nmkb(c(sigma0, v_slab, p0), f,
-                              # lower = c(0, 0), upper = c(Inf, Inf))
+    # hyper_opt = optim(c(sigma0, v_slab), f, method = "Nelder-Mead")
+    hyper_opt = dfoptim::nmkb(c(sigma0, v_slab), f,
+                              lower = c(0, 0), upper = c(Inf, Inf))
 
     sigma0 = hyper_opt$par[1]
     v_slab = hyper_opt$par[2]
