@@ -113,49 +113,14 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
     sigm_p_site3 = plogis(p_site3, log.p = TRUE)
     sigm_mp_site3_dnorm = plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
     
-    f <- function(params) {
-      
-      sigma0 = params[1]
-      v_slab = params[2]
-      # 
-      # browser()
-      
-      logs1 = .5 * (
-        # t(m) %*% (V_site2_inv %*% m_site2 + (tXy / sigma0^2)) -
-          tmtXy / sigma0^2 -
-          # n * log(2 * pi * sigma0^2) - 
-          n * log(sigma0^2) -
-          (yty / sigma0^2) - 
-          # t(m_site2) %*% V_site2_inv %*% m_site2 -
-          determinant(In + (XV_tX / sigma0^2))$modulus #+ 
-          # sum( log1pvv + mv_sites )
-      )
-      # logc = log_sum_exp(
-      #   plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-      #   plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
-      # )
-      logc = log_sum_exp(
-        sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-        sigm_mp_site3_dnorm
-      )
-      # browser()
-      # logs2 = .5 * sum(
-        # 2*logc #+ 
-          # log1pvv + mv_sites + 
-          # 2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
-          # 2*log( plogis(p_site3) * plogis(-p_site3) )
-      # )
-      logs2 = sum(logc)
-      value = logs1 + logs2 #+ 
-        # .5*d*log(2*pi) #+ 
-        # .5 * sum(log(v) - mv_sites) +
-        # sum( log(plogis(p_site2) * plogis(p_site3) + plogis(-p_site2) * plogis(-p_site3)))
-      return(-value)
-    }
-    
     # hyper_opt = optim(c(sigma0, v_slab), f, method = "Nelder-Mead")
-    hyper_opt = dfoptim::nmkb(c(sigma0, v_slab), f,
-                              lower = c(0, 0), upper = c(Inf, Inf))
+    hyper_opt = dfoptim::nmkb(c(sigma0, v_slab), hyper_obj,
+                              lower = c(0, 0), upper = c(Inf, Inf), 
+                              n = n, tmtXy = tmtXy, yty = yty, In = In, 
+                              XV_tX = XV_tX, 
+                              sigm_p_site3 = sigm_p_site3, 
+                              sigm_mp_site3_dnorm = sigm_mp_site3_dnorm,
+                              m_site1 = m_site1, v_site1 = v_site1)
 
     sigma0 = hyper_opt$par[1]
     v_slab = hyper_opt$par[2]
@@ -173,4 +138,45 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
   )
   
   return(result)
+}
+
+hyper_obj = function(params, n, tmtXy, yty, In, XV_tX,
+                     sigm_p_site3, sigm_mp_site3_dnorm,
+                     m_site1, v_site1) {
+  sigma0 = params[1]
+  v_slab = params[2]
+  # 
+  # browser()
+  
+  logs1 = .5 * (
+    # t(m) %*% (V_site2_inv %*% m_site2 + (tXy / sigma0^2)) -
+    tmtXy / sigma0^2 -
+      # n * log(2 * pi * sigma0^2) - 
+      n * log(sigma0^2) -
+      (yty / sigma0^2) - 
+      # t(m_site2) %*% V_site2_inv %*% m_site2 -
+      determinant(In + (XV_tX / sigma0^2))$modulus #+ 
+    # sum( log1pvv + mv_sites )
+  )
+  # logc = log_sum_exp(
+  #   plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
+  #   plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+  # )
+  logc = log_sum_exp(
+    sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
+    sigm_mp_site3_dnorm
+  )
+  # browser()
+  # logs2 = .5 * sum(
+  # 2*logc #+ 
+  # log1pvv + mv_sites + 
+  # 2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
+  # 2*log( plogis(p_site3) * plogis(-p_site3) )
+  # )
+  logs2 = sum(logc)
+  value = logs1 + logs2 #+ 
+  # .5*d*log(2*pi) #+ 
+  # .5 * sum(log(v) - mv_sites) +
+  # sum( log(plogis(p_site2) * plogis(p_site3) + plogis(-p_site2) * plogis(-p_site3)))
+  return(-value)
 }

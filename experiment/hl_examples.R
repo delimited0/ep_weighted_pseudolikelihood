@@ -21,12 +21,36 @@ y = rnorm(n, X %*% w, sigma_noise)
 p0 = .1
 weights = rep(1, n)
 sigma0 = sqrt(1)
+
+tictoc::tic()
 result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
+tictoc::toc()
 result$m
 
 # compare to mcmc
 prior = BoomSpikeSlab::SpikeSlabPrior(X, y, expected.model.size = 1)
 mcmc_result = BoomSpikeSlab::lm.spike(y ~ X - 1, niter = 5000)
+
+
+# Bigger example ----------------------------------------------------------
+
+d = 1000
+n = 100
+X = cbind(1, mvtnorm::rmvnorm(n, rep(0, d), 5.*diag(d) + .5*rep(1, d) %*% t(rep(1, d))))
+w = c(1, rep(1, 10), rep(0, d-10))
+
+sigma_noise = sqrt(1/10)
+y = rnorm(n, X %*% w, sigma_noise)
+
+p0 = .1
+weights = rep(1, n)
+sigma0 = sqrt(1)
+v_slab = .1
+
+tictoc::tic()
+result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
+tictoc::toc()
+result$m
 
 # Example 5.1 -------------------------------------------------------------
 
