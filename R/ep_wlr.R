@@ -13,9 +13,10 @@ log_sum_exp = function(u, v) {
 #' @param max_iter maximum number of iterations
 #' @param delta convergence parameter change threshold
 #' @param k damping multiplier
+#' @param woodbury boolean, use woodbury form of update for V or not?
 #' @export
 ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200, 
-                  delta = 1e-4, k = .99) {
+                  delta = 1e-4, k = .99, woodbury = FALSE) {
   
   d = ncol(X)
   n = length(y)
@@ -31,6 +32,7 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
   # precomputed values
   tXy = t(X) %*% y
   yty = sum(y^2)
+  tXX = t(X) %*% X
   In = diag(n)
   
   # first updates ----
@@ -87,8 +89,12 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
     V_site2 = diag(as.vector(v_site2))
     V_site2_inv = diag(1 / as.vector(v_site2))
     XV_tX = X %*% V_site2 %*% t(X)
-    V = V_site2 - V_site2 %*% t(X) %*% 
-      solve( sigma0^2*In + XV_tX, X %*% V_site2 )
+    if (woodbury) 
+      V = V_site2 - V_site2 %*% t(X) %*% 
+        solve( sigma0^2*In + XV_tX, X %*% V_site2 )
+    else {
+      V = solve(V_site2_inv + (tXX / sigma0^2))
+    }
     
     v_old = v
     v = diag(V)

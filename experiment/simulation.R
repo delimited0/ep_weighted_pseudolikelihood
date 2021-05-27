@@ -2,7 +2,7 @@ library(future.apply)
 library(doFuture)
 
 wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab, 
-                          n_threads = 1, blas_threads = 1) {
+                          n_threads = 1, blas_threads = 1, woodbury = FALSE) {
   registerDoFuture()
   plan(multisession, workers = n_threads)
   RhpcBLASctl::blas_set_num_threads(blas_threads)
@@ -26,7 +26,8 @@ wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
         y_weighted = y * sqrt_weight[i, ]
         X_weighted = X * sqrt_weight[i, ]
 
-        fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, v_slab)
+        fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, v_slab,
+                            woodbury)
 
         prob_row = matrix(0, nrow = 1, ncol = p)
         prob_row[, -resp_idx] = t(plogis(fit$p))
