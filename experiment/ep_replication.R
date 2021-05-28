@@ -1,4 +1,4 @@
-library(future.apply)
+# library(future.apply)
 library(data.table)
 source("experiment/simulation.R")
 setDTthreads(1)
@@ -7,12 +7,11 @@ setDTthreads(1)
 # library(future.apply)
 library(doFuture)
 registerDoFuture()
-plan(multisession, workers = 4)
-# RhpcBLASctl::blas_set_num_threads(1)
+plan(multisession, workers = 8)
 
-library(progressr)
-handlers(global = TRUE)
-handlers("progress")
+progressr::handlers("progress")
+
+# RhpcBLASctl::blas_set_num_threads(1)
 
 # Discrete covariate, independent ------------------------------------------------------
 set.seed(1)
@@ -252,7 +251,7 @@ progressr::with_progress({
       
       # fit the n x p regression models
       graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 1)
+                              blas_threads = 1, woodbury = FALSE)
       
       # compute accuracy metrics
       metrics = rbindlist(
@@ -368,35 +367,40 @@ n_sim = 50
 progressr::with_progress({
   prog = progressr::progressor(along = 1:n_sim)
   
-  incl_prob_dt = rbindlist(
-    future_sapply(1:n_sim, function(sim_idx) {
-      
+  # incl_prob_dt = rbindlist(
+    
+  incl_prob_dt = 
+    foreach(sim_idx = 1:n_sim, .combine = rbind) %dopar% {
       prog(sprintf("Simulation %g, %s", p, sim_idx, Sys.time()))
       
       graphs = wpl_regression(X, D, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 4, woodbury = TRUE)
+                              blas_threads = 1, woodbury = FALSE)
       
-      incl_prob = rbindlist(
-        lapply(graphs, function(graph) {
-          
-          # symmetrize estimated graph
-          for(i in 1:(p+1)) {
-            for(j in i:(p+1)) {
-              graph[i, j] = mean(c(graph[i, j], graph[j, i]))
-              graph[j, i] = graph[i, j]
-            }
+      incl_prob = vector("list", length(graphs))
+      
+      for (i in 1:length(graphs)) {
+        
+        graph = graphs[[i]]
+        
+        for(k in 1:(p+1)) {
+          for(j in k:(p+1)) {
+            graph[k, j] = mean(c(graph[k, j], graph[j, k]))
+            graph[j, k] = graph[k, j]
           }
-          
-          data.table(
-            incl_prob_12 = graph[1, 2],
-            incl_prob_13 = graph[1, 3],
-            individual = i,
-            simulation = sim_idx
-          )
-        })
-      )
-    
-    })
-  )
+        }
+        
+        incl_prob[[i]] = data.table(
+          incl_prob_12 = graph[1, 2],
+          incl_prob_13 = graph[1, 3],
+          individual = i,
+          simulation = sim_idx
+        )
+      }
+      
+      return(rbindlist(incl_prob))
+    }
 })
+
+filename = paste0("data/", Sys.Date(), "_continuous_covariate.RDS")
+saveRDS(incl_prob_dt, file = filename)
 
