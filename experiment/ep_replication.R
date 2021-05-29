@@ -24,26 +24,8 @@ Lam2 = Lam1 #Same lambda for both covariate levels, corresponds to covariate ind
 Var1 = solve(Lam1 %*% t(Lam1) + diag(rep(10, p+1))) #covariance matrix for covariate level 1
 Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covariate level 2
 
-X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-
-data_mat = rbind(X1, X2)
-
 # covariate matrix
 Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
-
-# compute weights
-tau = 1  # bandwidth
-D = matrix(1, n, n)
-for(i in 1:n){
-  for(j in 1:n){
-    D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
-  }
-}
-for(i in 1:n){
-  D[, i] = n * (D[, i] / sum(D[, i])) #Scaling the weights so that they add up to n
-  # D[,i]=1 # When there is no covariate information, set the weights to be 1 throughout.
-}
 
 # true graph
 beta = matrix(0, p+1, p+1)
@@ -68,7 +50,22 @@ progressr::with_progress({
       
       prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
       
-      # print(paste0(" --- Simulation ", sim_idx, " ---"))
+      # simulate the data for this iteration
+      X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+      X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+      data_mat = rbind(X1, X2)
+      
+      # compute weights
+      tau = 1  # bandwidth
+      D = matrix(1, n, n)
+      for(i in 1:n){
+        for(j in 1:n){
+          D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
+        }
+      }
+      for(i in 1:n){
+        D[, i] = n * (D[, i] / sum(D[, i])) #Scaling the weights so that they add up to n
+      }
       
       # fit the n x p regression models
       graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
@@ -118,11 +115,6 @@ Lam2 = Lam1 #Same lambda for both covariate levels, corresponds to covariate ind
 Var1 = solve(Lam1 %*% t(Lam1) + diag(rep(10, p+1))) #covariance matrix for covariate level 1
 Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covariate level 2
 
-X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-
-data_mat = rbind(X1, X2)
-
 # covariate matrix
 Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
 
@@ -151,6 +143,11 @@ progressr::with_progress({
   sim_accuracy = rbindlist(future_lapply(1:n_sim, function(sim_idx) {
     
     prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
+    
+    # simulate data
+    X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+    X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+    data_mat = rbind(X1, X2)
     
     # fit the n x p regression models
     graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
@@ -203,25 +200,8 @@ progressr::with_progress({
     Var1 = solve(Lam1 %*% t(Lam1) + diag(rep(10, p+1))) #covariance matrix for covariate level 1
     Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covariate level 2
     
-    X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-    X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-    
-    data_mat = rbind(X1, X2)
-    
     # covariate matrix
     Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
-    
-    # compute weights
-    tau = 1  # bandwidth
-    D = matrix(1, n, n)
-    for(i in 1:n){
-      for(j in 1:n){
-        D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
-      }
-    }
-    for(i in 1:n){
-      D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
-    }
     
     # true graphs
     beta_neg = matrix(0, p+1, p+1)
@@ -242,12 +222,28 @@ progressr::with_progress({
     sigma0 = 1
     p0 = .2
     v_slab = 3
+    tau = 1  # bandwidth
     
     n_sim = 50
     
     sim_accuracy = rbindlist(future_lapply(1:n_sim, function(sim_idx) {
       
       prog(sprintf("Dimension %g, Simulation %g, %s", p, sim_idx, Sys.time()))
+      
+      X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+      X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+      data_mat = rbind(X1, X2)
+      
+      # compute weights
+      D = matrix(1, n, n)
+      for(i in 1:n){
+        for(j in 1:n){
+          D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
+        }
+      }
+      for(i in 1:n){
+        D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
+      }
       
       # fit the n x p regression models
       graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
@@ -260,7 +256,7 @@ progressr::with_progress({
           # symmetrize estimated graph
           for(i in 1:(p+1)) {
             for(j in i:(p+1)) {
-              graph[i, j] = mean(c(graph[i, j], graph[j, i]))
+              graph[i, j] = max(graph[i, j], graph[j, i])
               graph[j, i] = graph[i, j]
             }
           }
@@ -298,11 +294,12 @@ MAXITER = 1
 STR = 1
 in_pr_13 = matrix(0, MAXITER, n)
 in_pr_12 = in_pr_13
+
 Var_cont = function(z) {
+  
   pr = matrix(0, p+1, p+1)
   diag(pr) = 2
-  #  pr[1,2]=STR*((z>0) && (z< .33)) + (STR - STR*((z-.33)/.33))*((z>0.33) && (z<0.66)) + (0)*((z>0.66) && (z<1))
-  #  pr[1,3]=0*((z>0) && (z< .33)) + (STR*((z-.33)/.33))*((z>0.33) && (z<0.66)) + (STR)*((z>0.66) && (z<1))
+  
   pr[2,3] = STR
   pr[1,2] = STR*((z>-1) && (z< -.33)) + (STR - STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (0)*((z>0.43) && (z<1))
   pr[1,3] = 0*((z>-1) && (z< -.33)) + (STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (STR)*((z>0.43) && (z<1))
@@ -326,41 +323,13 @@ specificity_160 = sensitivity_20
 Z = c(seq(-0.99, -0.331, (-.331+.99)/59), 
       seq(-0.229,0.329,(.329+.229)/59),
       seq(0.431,.99,(.99-.431)/59))
-# Z=seq(0.01,.99,.98/(n-1))
 Z = matrix(Z, n, 1)
 X = matrix(0, n, p+1)
-for(i in 1:n) {
-  X[i, ] = MASS::mvrnorm(1, rep(0, p+1), Var_cont(Z[i]))
-}
-
-# weight matrix
-tau = 0.56
-D = matrix(1, n, n)
-for(i in 1:n) {
-  for(j in 1:n) {
-    # D[j,i]= dnorm(sqrt(norm((Z[i,1]-Z[j,1])/h1,"2")^2 + norm((Z[i,2]-Z[j,2])/h2,"2")^2),0,1)
-    D[j, i] = dnorm(norm(Z[i,]-Z[j,],"2"), 0, tau)
-  }
-}
-for(i in 1:n){
-  D[, i] = n*(D[,i] / sum(D[,i]))
-  #    D[,i]=1
-}
-
-# true_lambda = 0.5 * rep(1, p)
-# L0 = 0.5
-# lambda_mean = true_lambda##rep(0,p) ###rnorm(p,0,4)
-# lambda_var = .001 * diag(p)
-# mu0_lambda = L0 * rep(1,p)## rep(0,p)
-# Sigma0_lambda = lambda_var###diag(p)
-# alpha = rep(0.2, n*p)
-# 
-# mu = rep(0, p)
-# true_pi = 0.5
 
 p0 = .2
 v_slab = 3
 sigma0 = 1
+tau = 0.56
 
 n_sim = 50
 
@@ -371,7 +340,25 @@ progressr::with_progress({
     
   incl_prob_dt = 
     foreach(sim_idx = 1:n_sim, .combine = rbind) %dopar% {
+      
       prog(sprintf("Simulation %g, %s", p, sim_idx, Sys.time()))
+      
+      # simulate data
+      for(i in 1:n) {
+        X[i, ] = MASS::mvrnorm(1, rep(0, p+1), Var_cont(Z[i]))
+      }
+      
+      # weight matrix
+      
+      D = matrix(1, n, n)
+      for(i in 1:n) {
+        for(j in 1:n) {
+          D[j, i] = dnorm(norm(Z[i,]-Z[j,],"2"), 0, tau)
+        }
+      }
+      for(i in 1:n){
+        D[, i] = n*(D[,i] / sum(D[,i]))
+      }
       
       graphs = wpl_regression(X, D, sigma0, p0, v_slab, n_threads = 1,
                               blas_threads = 1, woodbury = FALSE)
