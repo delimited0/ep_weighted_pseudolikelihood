@@ -3,27 +3,51 @@ library(data.table)
 
 # Discrete covariate, independent -----------------------------------------
 
-cov_indep = readRDS("data/2021-05-26_covariate_independent.RDS")
+cov_indep = readRDS("data/2021-05-29_covariate_independent.RDS")
 
-cov_indep_long = melt(cov_indep, id.vars = c("individual", "simulation"))
+n = 100
+covariate = -.1*(1:n <= n/2)  + .1*(1:n > n/2)
+cov_indep[, c("covariate", "individual") := 
+            list(as.factor(covariate), 1:n), 
+          by = "simulation"]
 
-ggplot(cov_indep_long, aes(x = value)) +
+cov_indep_long = melt(cov_indep, id.vars = c("individual", "simulation", "covariate"))
+
+summ_cov_indep = cov_indep_long[, .(mean_value = mean(value)),
+                                by = c("individual", "variable", "covariate")]
+
+plt = ggplot(summ_cov_indep, aes(x = mean_value, fill = covariate)) +
   geom_boxplot() +
   facet_wrap(vars(variable)) +
-  coord_flip()
+  coord_flip() +
+  theme_bw()
 
+filename = paste0(Sys.Date(), "_discrete_covariate_independent_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
 
 # No covariate ------------------------------------------------------------
 
-no_cov = readRDS("data/2021-05-26_no_covariate.RDS")
+no_cov = readRDS("data/2021-05-29_no_covariate.RDS")
 
-no_cov_long = melt(no_cov, id.vars = c("individual", "simulation"))
+n = 100
+covariate = -.1*(1:n <= n/2)  + .1*(1:n > n/2)
+no_cov[, c("covariate", "individual") := 
+         list(as.factor(covariate), 1:n), 
+       by = "simulation"]
 
-ggplot(no_cov_long, aes(x = value)) +
+no_cov_long = melt(no_cov, id.vars = c("individual", "simulation", "covariate"))
+
+summ_no_cov = no_cov_long[, .(mean_value = mean(value)),
+                             by = c("individual", "variable", "covariate")]
+
+plt = ggplot(summ_no_cov, aes(x = mean_value, fill = covariate)) +
   geom_boxplot() +
   facet_wrap(vars(variable)) +
-  coord_flip()
+  coord_flip() +
+  theme_bw()
 
+filename = paste0(Sys.Date(), "_no_covariate_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
 
 # Discrete covariate, dependent -------------------------------------------
 
@@ -33,8 +57,8 @@ cov_dep_filenames =
 
 cov_dep_sims = lapply(cov_dep_filenames, readRDS) 
 n = 100
+covariate = c(rep(-.1, n/2), rep(.1, n/2))
 cov_dep_sims = lapply(cov_dep_sims, function(sim) {
-  covariate = c(rep(-.1, n/2), rep(.1, n/2))
   sim[, c("individual", "covariate") := list(1:n, covariate), by = simulation]
 })
 
@@ -48,17 +72,21 @@ avg_cov_dep_dt = cov_dep_dt[, .(sensitivity = mean(sensitivity),
 
 avg_cov_dep_long = melt(avg_cov_dep_dt, id.vars = c("individual", "p", "covariate"))
 
-ggplot(avg_cov_dep_long, aes(x = value, fill = covariate)) +
+plt = ggplot(avg_cov_dep_long, aes(x = value, fill = covariate)) +
   geom_boxplot() +
   facet_grid(rows = vars(variable), cols = vars(p)) +
   coord_flip() +
-  theme_minimal()
+  theme_bw()
+
+filename = paste0(Sys.Date(), "_discrete_covariate_dependent_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 8, height = 6, path = "output")
 
 
 # Continuous covariate ----------------------------------------------------
 
 n = 180
 p = 4
+n_sim = 50
 MAXITER = 1
 STR = 1
 in_pr_13 = matrix(0, MAXITER, n)
@@ -109,7 +137,7 @@ precisions = rbindlist(
   })
 )
 
-cont_cov = readRDS("data/2021-05-28_continuous_covariate.RDS")
+cont_cov = readRDS("data/2021-05-29_continuous_covariate.RDS")
 cont_cov[, covariate := Z, by = "simulation"]
 cont_cov[, c("precision_12", "precision_13") := 
            list(precisions$prec_12, precisions$prec_13), by = "simulation"]
@@ -125,8 +153,23 @@ cont_cov_long = melt(cont_cov_long,
 
 summ_cont_cov = 
   cont_cov_long[, .(mean_incl_prob = mean(inclusion_est),
-                    se_incl_prob = sd(inclusion_est) / sqrt(.N)),
-                by = c("simulation", "inclusion_prob", "covariate")]
+                    se_incl_prob = sd(inclusion_est) / sqrt(n_sim)),
+                by = c("inclusion_prob", "covariate",
+                       "individual")]
 
-ggplot(cont_cov, aes(x = individual, y = value)) +
-  facet_grid(rows = )
+plt = ggplot(summ_cont_cov, aes(x = individual, y = mean_incl_prob)) +
+  geom_point() +
+  geom_ribbon(aes(ymin = mean_incl_prob + 2*se_incl_prob,
+                  ymax = mean_incl_prob - 2*se_incl_prob),
+              alpha = .2) +
+  facet_grid(rows = vars(inclusion_prob)) +
+  theme_bw() +
+  labs(y = "Inclusion Probability", x = "Subject Index")
+
+filename = paste0(Sys.Date(), "_continuous_covariate_by_subject.pdf")
+ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
+
+ggplot(cont_cov_long, aes(x = individual, y = precision_value)) +
+  geom_point() + 
+  facet_grid(rows = vars(precision)) +
+  theme_bw()

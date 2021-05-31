@@ -5,7 +5,8 @@ setDTthreads(1)
 
 # Parallel control --------------------------------------------------------
 # library(future.apply)
-library(doFuture)
+# library(doFuture)
+library(doRng)
 registerDoFuture()
 plan(multisession, workers = 8)
 
@@ -73,7 +74,8 @@ progressr::with_progress({
       
       # compute accuracy metrics
       metrics = rbindlist(
-        lapply(graphs, function(graph) {
+        foreach(individual = 1:length(graphs)) %do% {
+          graph = graphs[[individual]]
           
           # symmetrize estimated graph
           for(i in 1:(p+1)) {
@@ -88,14 +90,14 @@ progressr::with_progress({
           data.table(
             sensitivity = sum(est_graph & beta) / sum(beta),
             specificity = sum(!est_graph & !beta) / sum(!beta),
-            individual = i, 
+            individual = individual, 
             simulation = sim_idx
           )
-        })
+        }
       )
       
       return(metrics)
-    })
+    }, future.seed = TRUE)
   )
   
 })
@@ -140,44 +142,48 @@ n_sim = 50
 progressr::with_progress({
   prog = progressr::progressor(along = 1:n_sim)
 
-  sim_accuracy = rbindlist(future_lapply(1:n_sim, function(sim_idx) {
-    
-    prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
-    
-    # simulate data
-    X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-    X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-    data_mat = rbind(X1, X2)
-    
-    # fit the n x p regression models
-    graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
-                            blas_threads = 1)
-    
-    # compute accuracy metrics
-    metrics = rbindlist(
-      lapply(graphs, function(graph) {
-        
-        # symmetrize estimated graph
-        for(i in 1:(p+1)) {
-          for(j in i:(p+1)) {
-            graph[i, j] = mean(c(graph[i, j], graph[j, i]))
-            graph[j, i] = graph[i, j]
+  sim_accuracy = rbindlist(
+    future_lapply(1:n_sim, function(sim_idx) {
+      
+      prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
+      
+      # simulate data
+      X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+      X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+      data_mat = rbind(X1, X2)
+      
+      # fit the n x p regression models
+      graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
+                              blas_threads = 1)
+      
+      # compute accuracy metrics
+      metrics = rbindlist(
+        foreach(individual = 1:length(graphs)) %do% {
+          
+          graph = graphs[[individual]]
+          
+          # symmetrize estimated graph
+          for(i in 1:(p+1)) {
+            for(j in i:(p+1)) {
+              graph[i, j] = mean(c(graph[i, j], graph[j, i]))
+              graph[j, i] = graph[i, j]
+            }
           }
+          
+          est_graph = 1 * (graph > 0.5)
+          
+          data.table(
+            sensitivity = sum(est_graph & beta) / sum(beta),
+            specificity = sum(!est_graph & !beta) / sum(!beta),
+            individual = individual, 
+            simulation = sim_idx
+          )
         }
-        
-        est_graph = 1 * (graph > 0.5)
-        
-        data.table(
-          sensitivity = sum(est_graph & beta) / sum(beta),
-          specificity = sum(!est_graph & !beta) / sum(!beta),
-          individual = i, 
-          simulation = sim_idx
-        )
-      })
-    )
-    
-    return(metrics)
-  }))
+      )
+      
+      return(metrics)
+    }, future.seed = TRUE)
+  )
 })
 
 filename = paste0("data/", Sys.Date(), "_no_covariate.RDS")
@@ -221,65 +227,67 @@ progressr::with_progress({
     # initial hyperparameter values
     sigma0 = 1
     p0 = .2
-    v_slab = 3
+    v_slab = 3 
     tau = 1  # bandwidth
     
     n_sim = 50
     
-    sim_accuracy = rbindlist(future_lapply(1:n_sim, function(sim_idx) {
-      
-      prog(sprintf("Dimension %g, Simulation %g, %s", p, sim_idx, Sys.time()))
-      
-      X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-      X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-      data_mat = rbind(X1, X2)
-      
-      # compute weights
-      D = matrix(1, n, n)
-      for(i in 1:n){
-        for(j in 1:n){
-          D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
-        }
-      }
-      for(i in 1:n){
-        D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
-      }
-      
-      # fit the n x p regression models
-      graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 1, woodbury = FALSE)
-      
-      # compute accuracy metrics
-      metrics = rbindlist(
-        lapply(graphs, function(graph) {
-          
-          # symmetrize estimated graph
-          for(i in 1:(p+1)) {
-            for(j in i:(p+1)) {
-              graph[i, j] = max(graph[i, j], graph[j, i])
-              graph[j, i] = graph[i, j]
-            }
+    sim_accuracy = rbindlist(
+      future_lapply(1:n_sim, function(sim_idx) {
+        
+        prog(sprintf("Dimension %g, Simulation %g, %s", p, sim_idx, Sys.time()))
+        
+        X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+        X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+        data_mat = rbind(X1, X2)
+        
+        # compute weights
+        D = matrix(1, n, n)
+        for(i in 1:n){
+          for(j in 1:n){
+            D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
           }
-          
-          est_graph = 1 * (graph > 0.5)
-          
-          if (i <= (n/2)) 
-            beta = beta_neg
-          else
-            beta = beta_pos
-          
-          data.table(
-            sensitivity = sum(est_graph & beta) / sum(beta),
-            specificity = sum(!est_graph & !beta) / sum(!beta),
-            individual = i, 
-            simulation = sim_idx,
-            p = p
-          )
-        })
-      )
-      
-      return(metrics)
-    }))
+        }
+        for(i in 1:n){
+          D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
+        }
+        
+        # fit the n x p regression models
+        graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
+                                blas_threads = 1, woodbury = FALSE)
+        
+        # compute accuracy metrics
+        metrics = rbindlist(
+          lapply(graphs, function(graph) {
+            
+            # symmetrize estimated graph
+            for(i in 1:(p+1)) {
+              for(j in i:(p+1)) {
+                graph[i, j] = max(graph[i, j], graph[j, i])
+                graph[j, i] = graph[i, j]
+              }
+            }
+            
+            est_graph = 1 * (graph > 0.5)
+            
+            if (i <= (n/2)) 
+              beta = beta_neg
+            else
+              beta = beta_pos
+            
+            data.table(
+              sensitivity = sum(est_graph & beta) / sum(beta),
+              specificity = sum(!est_graph & !beta) / sum(!beta),
+              individual = i, 
+              simulation = sim_idx,
+              p = p
+            )
+          })
+        )
+        
+        return(metrics)
+      }, future.seed = TRUE)
+    )
     
     filename = paste0("data/", Sys.Date(), "_p=", p, "_dependent_covariate.RDS")
     saveRDS(sim_accuracy, file = filename)
@@ -339,7 +347,7 @@ progressr::with_progress({
   # incl_prob_dt = rbindlist(
     
   incl_prob_dt = 
-    foreach(sim_idx = 1:n_sim, .combine = rbind) %dopar% {
+    foreach(sim_idx = 1:n_sim, .combine = rbind) %dorng% {
       
       prog(sprintf("Simulation %g, %s", p, sim_idx, Sys.time()))
       
