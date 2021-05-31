@@ -6,9 +6,9 @@ setDTthreads(1)
 # Parallel control --------------------------------------------------------
 # library(future.apply)
 # library(doFuture)
-library(doRng)
+library(doRNG)
 registerDoFuture()
-plan(multisession, workers = 8)
+plan(multisession, workers = 4)
 
 progressr::handlers("progress")
 
@@ -74,7 +74,7 @@ progressr::with_progress({
       
       # compute accuracy metrics
       metrics = rbindlist(
-        foreach(individual = 1:length(graphs)) %do% {
+        foreach(individual = 1:length(graphs)) %do% { 
           graph = graphs[[individual]]
           
           # symmetrize estimated graph
@@ -97,7 +97,7 @@ progressr::with_progress({
       )
       
       return(metrics)
-    }, future.seed = TRUE)
+    }, future.seed = 1)
   )
   
 })
@@ -182,7 +182,7 @@ progressr::with_progress({
       )
       
       return(metrics)
-    }, future.seed = TRUE)
+    }, future.seed = 1)
   )
 })
 
@@ -208,6 +208,17 @@ progressr::with_progress({
     
     # covariate matrix
     Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
+    
+    # compute weights
+    D = matrix(1, n, n)
+    for(i in 1:n){
+      for(j in 1:n){
+        D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
+      }
+    }
+    for(i in 1:n){
+      D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
+    }
     
     # true graphs
     beta_neg = matrix(0, p+1, p+1)
@@ -241,24 +252,13 @@ progressr::with_progress({
         X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
         data_mat = rbind(X1, X2)
         
-        # compute weights
-        D = matrix(1, n, n)
-        for(i in 1:n){
-          for(j in 1:n){
-            D[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
-          }
-        }
-        for(i in 1:n){
-          D[, i] = n * (D[, i] / sum(D[, i])) # Scaling the weights so that they add up to n
-        }
-        
         # fit the n x p regression models
         graphs = wpl_regression(data_mat, D, sigma0, p0, v_slab, n_threads = 1,
                                 blas_threads = 1, woodbury = FALSE)
         
         # compute accuracy metrics
         metrics = rbindlist(
-          lapply(graphs, function(graph) {
+          foreach(individual = 1:length(graphs)) %do% {
             
             # symmetrize estimated graph
             for(i in 1:(p+1)) {
@@ -278,11 +278,11 @@ progressr::with_progress({
             data.table(
               sensitivity = sum(est_graph & beta) / sum(beta),
               specificity = sum(!est_graph & !beta) / sum(!beta),
-              individual = i, 
+              individual = individual, 
               simulation = sim_idx,
               p = p
             )
-          })
+          }
         )
         
         return(metrics)
