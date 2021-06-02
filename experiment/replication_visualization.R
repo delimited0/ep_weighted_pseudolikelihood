@@ -3,6 +3,8 @@ library(data.table)
 
 # Discrete covariate, independent -----------------------------------------
 
+# legacy plot
+
 cov_indep = readRDS("data/2021-05-29_covariate_independent.RDS")
 
 n = 100
@@ -25,7 +27,27 @@ plt = ggplot(summ_cov_indep, aes(x = mean_value, fill = covariate)) +
 filename = paste0(Sys.Date(), "_discrete_covariate_independent_boxplot.pdf")
 ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
 
+# by simulation plot
+
+cov_indep = readRDS("data/2021-05-31_covariate_independent.RDS")
+cov_indep_long = melt(cov_indep, id.vars = c("individual", "simulation", "covariate"))
+
+plt = ggplot(cov_indep_long, aes(x = value, fill = as.factor(covariate))) +
+  geom_boxplot() + 
+  facet_wrap(vars(variable)) +
+  coord_flip() +
+  theme_bw() + 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "bottom") +
+  labs(fill = "Covariate")
+
+filename = paste0(Sys.Date(), "_discrete_covariate_independent_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
+
 # No covariate ------------------------------------------------------------
+
+# legacy plot
 
 no_cov = readRDS("data/2021-05-29_no_covariate.RDS")
 
@@ -49,7 +71,27 @@ plt = ggplot(summ_no_cov, aes(x = mean_value, fill = covariate)) +
 filename = paste0(Sys.Date(), "_no_covariate_boxplot.pdf")
 ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
 
+# by simulation plot
+
+no_cov = readRDS("data/2021-05-31_no_covariate.RDS")
+no_cov_long = melt(no_cov, id.vars = c("individual", "simulation", "covariate"))
+
+plt = ggplot(no_cov_long, aes(x = value, fill = as.factor(covariate))) +
+  geom_boxplot() + 
+  facet_wrap(vars(variable)) +
+  coord_flip() +
+  theme_bw() + 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "bottom") +
+  labs(fill = "Covariate")
+
+filename = paste0(Sys.Date(), "_no_covariate_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
+
 # Discrete covariate, dependent -------------------------------------------
+
+# averaged by individual plot
 
 all_simulations = dir("data", full.names = TRUE)
 cov_dep_filenames = 
@@ -81,6 +123,31 @@ plt = ggplot(avg_cov_dep_long, aes(x = value, fill = covariate)) +
 filename = paste0(Sys.Date(), "_discrete_covariate_dependent_boxplot.pdf")
 ggsave(filename, plt, "pdf", width = 8, height = 6, path = "output")
 
+# by simulation plot
+
+all_simulations = dir("data", full.names = TRUE)
+cov_dep_filenames = 
+  all_simulations[stringr::str_detect(all_simulations, 
+                                      "2021-05-31_p=\\d\\d_dependent_covariate")]
+
+cov_dep_sims = lapply(cov_dep_filenames, readRDS) 
+cov_dep_dt = rbindlist(cov_dep_sims)
+cov_dep_dt[, p := rep(c(10, 30, 50), each = 100)]  # forgot to add dimension
+
+cov_dep_long = melt(cov_dep_dt, id.vars = c("individual", "p", "covariate", "simulation"))
+
+plt = ggplot(cov_dep_long, aes(x = value, fill = as.factor(covariate))) +
+  geom_boxplot() +
+  facet_grid(rows = vars(variable), cols = vars(p)) +
+  coord_flip() + 
+  theme_bw() +
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "bottom") +
+  labs(fill = "Covariate")
+
+filename = paste0(Sys.Date(), "_discrete_covariate_dependent_boxplot.pdf")
+ggsave(filename, plt, "pdf", width = 8, height = 6, path = "output")
 
 # Continuous covariate ----------------------------------------------------
 
