@@ -13,32 +13,20 @@
 ##sigmabeta_sq: prior variance of coefficient parameter
 ##true_pi: estimate of spike and slab mixture proportion.
 
-#' @param X: the data matrix except the j th variable
-#' @param XtX is x transpose times x.
-#' @param DXtX:diagonal elements of XtX
-#' @param Diff_mat: XtX-diag(DXtX)
-#' @param Xty: x transpose times y
-#' @param sigmasq: variance of response given the parameters (homoscedastic part, actual variance sigma_sq/w_i)
-#' @param sigmabeta_sq: prior variance of coefficient parameter
-#' @param true_pi: estimate of spike and slab mixture proportion.
 #' @export
-cov_vsvb = function(y, X, Z, XtX, DXtX, Diff_mat, Xty, sigmasq, sigmabeta_sq, true_pi){
+cov_vsvb = function(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D, D_long, sigmasq, sigmabeta_sq, 
+                    y_long_vec, X_vec, true_pi) {
   
   thres=1e-7
   tol=1e-9
-  
-  msg <- function(s, ...)
-  {
-    time <- format(Sys.time(), "%X")
-    cat(sprintf("%s %s\n", time, s))
-  }
-  
   
   change_alpha <- rep(0.001,n*p) #alpha_new - alpha_int
   
   max_iter <- 100
   iter=1
   Mu_vec=matrix(rep(mu,n),n*p,1)
+  S_sq = matrix(NA, n, p)
+  
   while(sqrt(sum(change_alpha^2))>tol & iter<max_iter){#The max_iter controls the max number of iterations until convergence
     
     alpha_int=alpha ##Initialization of inclusion probability parameter.
@@ -62,11 +50,6 @@ cov_vsvb = function(y, X, Z, XtX, DXtX, Diff_mat, Xty, sigmasq, sigmabeta_sq, tr
       xmualpha_mat=t(matrix(X_mu_alpha,p,n))%*%(matrix(1,p,p)-diag(rep(1,p)))
       XW_mat=matrix(X_vec*D_long[,i],n,p,byrow=TRUE)*xmualpha_mat
       
-      
-      
-      
-      
-      
       mu_mat[i,]=(t(y_XW_mat)%*%matrix(1,n,1)-(t(XW_mat)%*%matrix(1,n,1)))*(S_sq[i,]/sigmasq) ### ### CAVI updation of mean variational parameter mu
     }
     Mu_vec=matrix(t(mu_mat),n*p,1)
@@ -89,7 +72,6 @@ cov_vsvb = function(y, X, Z, XtX, DXtX, Diff_mat, Xty, sigmasq, sigmabeta_sq, tr
     alpha[which(unlogitalpha>9)]=1 #thresholding very large values to 1 for computational stability
     alpha[which(unlogitalpha<=9)]=1/(1+ exp(-unlogitalpha[which(unlogitalpha<=9)])) ### ### CAVI updation of variational parameter alpha
     
-    
     e=0
     for(i in 1:n){ ## calculates ELBO for the j th variable by adding the contribution of the parameter
       ##corresponding to every individual in study. i th iteration takes the contribution of the variational
@@ -102,8 +84,6 @@ cov_vsvb = function(y, X, Z, XtX, DXtX, Diff_mat, Xty, sigmasq, sigmabeta_sq, tr
     
     alpha_new <- alpha
     change_alpha <-alpha_new - alpha_int
-    
-    
     
     ELBO_LBit[iter]=ELBO_LB
     iter=iter+1

@@ -59,7 +59,6 @@ for (resp_index in 1:(p+1)) {
   sigmasq = 1 #Initialization of the hyperparameter value
   E <- rnorm(n, 0, sigmasq)
   
-  # compute weights
   XtX = t(X) %*% X
   
   DXtX = diag(XtX)

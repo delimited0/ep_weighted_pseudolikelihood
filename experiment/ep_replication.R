@@ -8,7 +8,7 @@ setDTthreads(1)
 # library(doFuture)
 library(doRNG)
 registerDoFuture()
-plan(multisession, workers = 4)
+plan(multisession, workers = 8)
 
 progressr::handlers("progress")
 
@@ -67,6 +67,8 @@ progressr::with_progress({
       
       graphs = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab, n_threads = 1,
                               blas_threads = 1)
+      
+      graphs_vb = wpl_vsvb_regression(data_mat, weight_mat, sigma0, p0, v_slab)
       
       metrics = rbind(
         score_model(mean_symmetrize(graphs[[1]]), true_graph, 1, sim_idx, -.1),
@@ -153,49 +155,42 @@ set.seed(1)
 n = 100
 n_sim = 50
 
-progressr::with_progress({
-  prog = progressr::progressor(along = 1:n_sim)
+for (p in c(10, 30, 50)) {
   
-  for (p in c(10, 30, 50)) {
+  Lam1 = c(3, 3, 3, 3, rep(0, p-3)) * 5 # For Z[i]=-0.1
+  Lam2 = c(rep(0, p-3), 3, 3, 3, 3) * 5
+  
+  Prec1 = Lam1 %*% t(Lam1) + diag(rep(10, p+1))
+  Prec2 = Lam2 %*% t(Lam2) + diag(rep(10, p+1))
+  
+  Var1 = solve(Prec1)
+  Var2 = solve(Prec2)
+  
+  # covariate matrix
+  Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
+  
+  # compute weights
+  tau = 1  # bandwidth
+  weight_mat = weight_matrix(n, Z)
+  weight_mat_fit = weight_mat[c(1, n), ]
+  
+  # true graphs
+  true_graph_neg = Prec1 != 0
+  diag(true_graph_neg) = 0
+  true_graph_pos = Prec2 != 0
+  diag(true_graph_pos) = 0
+  
+  # initial hyperparameter values
+  sigma0 = 1
+  p0 = .2
+  v_slab = 3 
+  
+  n_sim = 50
+  
+  progressr::with_progress({
+    prog = progressr::progressor(along = 1:n_sim)
     
-    Lam1 = c(3, 3, 3, 3, rep(0, p-3)) * 5 # For Z[i]=-0.1
-    Lam2 = c(rep(0, p-3), 3, 3, 3, 3) * 5
-    
-    Var1 = solve(Lam1 %*% t(Lam1) + diag(rep(10, p+1))) #covariance matrix for covariate level 1
-    Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covariate level 2
-    
-    # covariate matrix
-    Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
-    
-    # compute weights
-    tau = 1  # bandwidth
-    weight_mat = weight_matrix(n, Z)
-    weight_mat_fit = weight_mat[c(1, n), ]
-    
-    # true graphs
-    true_graph_neg = matrix(0, p+1, p+1)
-    for(i in 1:(p+1)){
-      for(j in 1:(p+1)){
-        true_graph_neg[i,j] = (Lam1[i] != 0 & Lam1[j] != 0)
-      }}
-    diag(true_graph_neg) = 0
-    
-    true_graph_pos = matrix(0, nrow = p+1, ncol = p+1)
-    for(i in 1:(p+1)){
-      for(j in 1:(p+1)){
-        true_graph_pos[i,j] = (Lam2[i] != 0 & Lam2[j] != 0)
-      }}
-    diag(true_graph_pos) = 0
-    
-    # initial hyperparameter values
-    sigma0 = 1
-    p0 = .2
-    v_slab = 3 
-    
-    
-    n_sim = 50
-    
-    sim_accuracy = rbindlist(
+    sim_accuracy = 
       foreach(sim_idx = 1:n_sim) %dorng% {
         
         prog(sprintf("Dimension %g, Simulation %g, %s", p, sim_idx, Sys.time()))
@@ -209,50 +204,22 @@ progressr::with_progress({
                                 blas_threads = 1, woodbury = FALSE)
         
         # compute accuracy metrics
-        
         metrics = rbind(
-          score_model(mean_symmetrize(graphs[[1]]), true_graph_neg, 1, sim_idx, -.1),
-          score_model(mean_symmetrize(graphs[[2]]), true_graph_pos, 2, sim_idx, .1)
+          score_model(mean_symmetrize(graphs[[1]]), true_graph_neg, 1, sim_idx, -.1, p),
+          score_model(mean_symmetrize(graphs[[2]]), true_graph_pos, 2, sim_idx, .1, p)
         )
         
-        # metrics = rbindlist(
-        #   foreach(individual = 1:length(graphs)) %do% {
-        #     
-        #     graph = graphs[[individual]]
-        #     
-        #     # symmetrize estimated graph
-        #     for(i in 1:(p+1)) {
-        #       for(j in i:(p+1)) {
-        #         graph[i, j] = max(graph[i, j], graph[j, i])
-        #         graph[j, i] = graph[i, j]
-        #       }
-        #     }
-        #     
-        #     est_graph = 1 * (graph > 0.5)
-        #     
-        #     if (individual <= (n/2)) 
-        #       beta = beta_neg
-        #     else
-        #       beta = beta_pos
-        #     
-        #     data.table(
-        #       sensitivity = sum(est_graph & beta) / sum(beta),
-        #       specificity = sum(!est_graph & !beta) / sum(!beta),
-        #       individual = individual, 
-        #       simulation = sim_idx,
-        #       p = p
-        #     )
-        #   }
-        # )
+        
+        filename = paste0("data/discrete_dependent/",
+                          Sys.Date(),
+                          "_sim=", sim_idx,
+                          "_p=", p, "_dependent_covariate.RDS")
+        saveRDS(metrics, file = filename)
         
         return(metrics)
       }
-    )
-    
-    filename = paste0("data/", Sys.Date(), "_p=", p, "_dependent_covariate.RDS")
-    saveRDS(sim_accuracy, file = filename)
-  }
-})
+  })
+}
 
 # Continuous covariate ----------------------------------------------------
 

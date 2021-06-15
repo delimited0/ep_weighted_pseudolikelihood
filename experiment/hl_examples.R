@@ -31,6 +31,10 @@ result$m
 prior = BoomSpikeSlab::SpikeSlabPrior(X, y, expected.model.size = 1)
 mcmc_result = BoomSpikeSlab::lm.spike(y ~ X - 1, niter = 5000)
 
+# compare to home rolled vsvb
+dp_result = epwpl::cov_vsvb(X, y, alpha0 = .2, sigmabeta_sq = v_slab, 
+                            true_pi = p0)
+
 
 # Bigger example ----------------------------------------------------------
 

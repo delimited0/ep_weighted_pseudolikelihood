@@ -91,48 +91,10 @@ ggsave(filename, plt, "pdf", width = 6, height = 4, path = "output")
 
 # Discrete covariate, dependent -------------------------------------------
 
-# averaged by individual plot
+all_simulations = dir("data/discrete_dependent/", full.names = TRUE)
 
-all_simulations = dir("data", full.names = TRUE)
-cov_dep_filenames = 
-  all_simulations[stringr::str_detect(dir("data"), "_dependent_covariate")]
-
-cov_dep_sims = lapply(cov_dep_filenames, readRDS) 
-n = 100
-covariate = c(rep(-.1, n/2), rep(.1, n/2))
-cov_dep_sims = lapply(cov_dep_sims, function(sim) {
-  sim[, c("individual", "covariate") := list(1:n, covariate), by = simulation]
-})
-
-
+cov_dep_sims = lapply(all_simulations, readRDS) 
 cov_dep_dt = rbindlist(cov_dep_sims)
-
-avg_cov_dep_dt = cov_dep_dt[, .(sensitivity = mean(sensitivity), 
-                                specificity = mean(specificity),
-                                covariate = as.factor(covariate)),
-                            by = c("individual", "p")]
-
-avg_cov_dep_long = melt(avg_cov_dep_dt, id.vars = c("individual", "p", "covariate"))
-
-plt = ggplot(avg_cov_dep_long, aes(x = value, fill = covariate)) +
-  geom_boxplot() +
-  facet_grid(rows = vars(variable), cols = vars(p)) +
-  coord_flip() +
-  theme_bw()
-
-filename = paste0(Sys.Date(), "_discrete_covariate_dependent_boxplot.pdf")
-ggsave(filename, plt, "pdf", width = 8, height = 6, path = "output")
-
-# by simulation plot
-
-all_simulations = dir("data", full.names = TRUE)
-cov_dep_filenames = 
-  all_simulations[stringr::str_detect(all_simulations, 
-                                      "2021-05-31_p=\\d\\d_dependent_covariate")]
-
-cov_dep_sims = lapply(cov_dep_filenames, readRDS) 
-cov_dep_dt = rbindlist(cov_dep_sims)
-cov_dep_dt[, p := rep(c(10, 30, 50), each = 100)]  # forgot to add dimension
 
 cov_dep_long = melt(cov_dep_dt, id.vars = c("individual", "p", "covariate", "simulation"))
 
