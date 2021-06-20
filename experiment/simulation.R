@@ -3,11 +3,11 @@ library(doFuture)
 library(data.table)
 
 wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab, 
-                          n_threads = 1, blas_threads = 1, woodbury = FALSE) {
+                          woodbury = FALSE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
-  RhpcBLASctl::blas_set_num_threads(blas_threads)
-  RhpcBLASctl::omp_set_num_threads(blas_threads)
+  # RhpcBLASctl::blas_set_num_threads(blas_threads)
+  # RhpcBLASctl::omp_set_num_threads(blas_threads)
   
   p = ncol(data_mat)
   n = nrow(weight_mat)
@@ -41,6 +41,41 @@ wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
     })
   })
 
+  return(graphs)
+}
+
+wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
+  p = ncol(data_mat)
+  n = nrow(weight_mat)
+  
+  sqrt_weight = sqrt(weight_mat)
+  
+  progressr::with_progress({
+    prog = progressr::progressor(along = 1:n)
+    
+    graphs = lapply(1:n, function(i) {
+      
+      
+      prog(sprintf("Individual =%g", i))
+      
+      incl_prob = sapply(1:p, function(resp_idx) {
+        
+        y = data_mat[, resp_idx]
+        X = data_mat[, -resp_idx]
+        y_weighted = y * sqrt_weight[i, ]
+        X_weighted = X * sqrt_weight[i, ]
+        
+        fit = epwpl::vb_wlr(X_weighted, y_weighted, sigma0, p0, v_slab)
+        
+        prob_row = matrix(0, nrow = 1, ncol = p)
+        prob_row[, -resp_idx] = t(plogis(fit$logit_alpha))
+        return(prob_row)
+      })
+      
+      return(incl_prob)
+    })
+  })
+  
   return(graphs)
 }
 

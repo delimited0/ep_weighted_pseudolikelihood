@@ -27,13 +27,16 @@ result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
 tictoc::toc()
 result$m
 
+microbenchmark::microbenchmark(
+  result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
+)
+
 # compare to mcmc
 prior = BoomSpikeSlab::SpikeSlabPrior(X, y, expected.model.size = 1)
 mcmc_result = BoomSpikeSlab::lm.spike(y ~ X - 1, niter = 5000)
 
 # compare to home rolled vsvb
-dp_result = epwpl::cov_vsvb(X, y, alpha0 = .2, sigmabeta_sq = v_slab, 
-                            true_pi = p0)
+dp_result = vb_wlr(X, y, result$sigma0, p0, result$v_slab)
 
 
 # Bigger example ----------------------------------------------------------

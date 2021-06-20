@@ -65,10 +65,9 @@ progressr::with_progress({
   
       # fit the 2 x p distinct regression models
       
-      graphs = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 1)
-      
-      graphs_vb = wpl_vsvb_regression(data_mat, weight_mat, sigma0, p0, v_slab)
+      graphs_ep = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab)
+      graphs_vb = wpl_vb_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab)
+      graphs_vsvb = wpl_vsvb_regression(data_mat, weight_mat, sigma0, p0, v_slab)
       
       metrics = rbind(
         score_model(mean_symmetrize(graphs[[1]]), true_graph, 1, sim_idx, -.1),
