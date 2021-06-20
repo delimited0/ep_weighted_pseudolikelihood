@@ -14,7 +14,8 @@
 ##true_pi: estimate of spike and slab mixture proportion.
 
 #' @export
-cov_vsvb = function(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D, D_long, sigmasq, sigmabeta_sq, 
+cov_vsvb = function(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D, D_long, 
+                    sigmasq, sigmabeta_sq, 
                     y_long_vec, X_vec, true_pi) {
   
   thres=1e-7
@@ -26,6 +27,7 @@ cov_vsvb = function(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D, D_long, sig
   iter=1
   Mu_vec=matrix(rep(mu,n),n*p,1)
   S_sq = matrix(NA, n, p)
+  ELBO_LBit=rep(0,10000)
   
   while(sqrt(sum(change_alpha^2))>tol & iter<max_iter){#The max_iter controls the max number of iterations until convergence
     

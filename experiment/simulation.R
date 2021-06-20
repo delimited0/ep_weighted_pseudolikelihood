@@ -101,7 +101,6 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
       }
     }
     
-    ELBO_LBit=rep(0,10000)
     Big_diag_mat <- matrix(rep(0,n^2*p),nrow=n,ncol=n*p)
     for(i in 1:n){
       k=p*(i-1)
@@ -169,15 +168,17 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
     elb1 = matrix(0, length(sigmavec), 1)
     
     for (j in 1:length(sigmavec)) {
-      res = epwpl::cov_vsvb(y, X, mu, mu_mat, alpha, DXtX_Big_ind, weight_mat, D_long, sigmasq, sigmabeta_sq,
+      res = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
+                            weight_mat, D_long, sigmasq, sigmabeta_sq,
                             y_long_vec, X_vec, true_pi)
       elb1[j] = res$var.elbo
       
     }
     sigmabeta_sq = sigmavec[which.max(elb1)] #Choosing hyperparameter based on ELBO maximization
     
-    result = cov_vsvb(y, X, data_mat, mu, alpha, DXtX_Big_ind, D_long, sigmabeta_sq,
-                      y_long_vec, X_vec, true_pi)
+    result = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
+                             weight_mat, D_long, sigmasq, sigmabeta_sq,
+                             y_long_vec, X_vec, true_pi)
     incl_prob = result$var.alpha
     mu0_val = result$var.mu0_lambda
     
@@ -186,7 +187,7 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
     mylist[[resp_index]] = heat_alpha
   }
   
-  return(rbindlist(mylist))
+  return(vsvb_to_graphs(mylist))
 }
 
 mean_symmetrize = function(mat) {
@@ -242,4 +243,21 @@ weight_matrix = function(n, cov_mat) {
   }
   
   return(weight_mat)
+}
+
+vsvb_to_graphs = function(vsvb_list) {
+  n = nrow(vsvb_list[[1]])
+  p = length(vsvb_list)
+  graphs = replicate(n, diag(p), simplify = FALSE)
+  
+  for (dimen in 1:p) {
+    for (i in 1:n) {
+      prob_row = rep(0, p)
+      prob_row[-dimen] = vsvb_list[[dimen]][i, ]
+        
+      graphs[[i]][dimen, ] = prob_row
+    }  
+  }
+  
+  return(graphs)
 }
