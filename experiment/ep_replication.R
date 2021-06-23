@@ -9,6 +9,8 @@ setDTthreads(1)
 library(doRNG)
 registerDoFuture()
 plan(multisession, workers = 8)
+RhpcBLASctl::blas_set_num_threads(1)
+RhpcBLASctl::omp_set_num_threads(1)
 
 progressr::handlers("progress")
 
@@ -65,13 +67,44 @@ progressr::with_progress({
   
       # fit the 2 x p distinct regression models
       
-      graphs_ep = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab)
-      graphs_vb = wpl_vb_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab)
-      graphs_vsvb = wpl_vsvb_regression(data_mat, weight_mat, sigma0, p0, v_slab)
+      
+      # run sutanoy's vsvb first
+      vsvb_result =
+        wpl_vsvb_regression(data_mat, weight_mat,
+                            sigma0, p0, v_slab, tune = TRUE)
+      
+      # use the the hyperparams selected there to fit ep
+      ep_fix_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                       sqrt(vsvb_result$sigma0sq), 
+                                       p0,
+                                       vsvb_result$v_slab, opt = FALSE)
+      
+      # using Nelder Mead hyperparam optimization
+      ep_opt_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                        sigma0, 
+                                        p0,
+                                        v_slab, 
+                                        opt = TRUE)
+      
+      # vb_result = wpl_vb_regression(data_mat, weight_mat_fit, 
+      #                               ep_result$sigma_noise, p0, ep_result$v_slab)
+      
       
       metrics = rbind(
-        score_model(mean_symmetrize(graphs[[1]]), true_graph, 1, sim_idx, -.1),
-        score_model(mean_symmetrize(graphs[[2]]), true_graph, 2, sim_idx, .1)
+        score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
+                    1, sim_idx, -.1, p),
+        score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
+                    2, sim_idx, .1, p),
+
+        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph, 
+                    1, sim_idx, -.1, p),
+        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph, 
+                    2, sim_idx, .1, p),
+        
+        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph, 
+                    1, sim_idx, -.1, p),
+        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph, 
+                    2, sim_idx, .1, p)
       )
       
       return(metrics)
@@ -79,7 +112,7 @@ progressr::with_progress({
   )
 })
 
-filename = paste0("data/", Sys.Date(), "_covariate_independent.RDS")
+filename = paste0("data/discrete_independent/", Sys.Date(), "_covariate_independent.RDS")
 saveRDS(sim_accuracy, file = filename)
 
 
@@ -131,13 +164,41 @@ progressr::with_progress({
       data_mat = rbind(X1, X2)
       
       # fit the 2 x p distinct regression models
-      graphs = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 1)
+      
+      # run sutanoy's vsvb first
+      vsvb_result =
+        wpl_vsvb_regression(data_mat, weight_mat,
+                            sigma0, p0, v_slab, tune = TRUE)
+      
+      # use the the hyperparams selected there to fit ep
+      ep_fix_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                        sqrt(vsvb_result$sigma0sq), 
+                                        p0,
+                                        vsvb_result$v_slab, opt = FALSE)
+      
+      # using Nelder Mead hyperparam optimization
+      ep_opt_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                        sigma0, 
+                                        p0,
+                                        v_slab, 
+                                        opt = TRUE)
       
       # compute accuracy metrics
       metrics = rbind(
-        score_model(mean_symmetrize(graphs[[1]]), true_graph, 1, sim_idx, -.1),
-        score_model(mean_symmetrize(graphs[[2]]), true_graph, 2, sim_idx, .1)
+        score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
+                    1, sim_idx, -.1, p),
+        score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
+                    2, sim_idx, .1, p),
+        
+        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph, 
+                    1, sim_idx, -.1, p),
+        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph, 
+                    2, sim_idx, .1, p),
+        
+        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph, 
+                    1, sim_idx, -.1, p),
+        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph, 
+                    2, sim_idx, .1, p)
       )
       
       return(metrics)
@@ -145,7 +206,7 @@ progressr::with_progress({
   )
 })
 
-filename = paste0("data/", Sys.Date(), "_no_covariate.RDS")
+filename = paste0("data/no_covariate/", Sys.Date(), "_no_covariate.RDS")
 saveRDS(sim_accuracy, file = filename)
 
 
@@ -199,15 +260,42 @@ for (p in c(10, 30, 50)) {
         data_mat = rbind(X1, X2)
         
         # fit the n x p regression models
-        graphs = wpl_regression(data_mat, weight_mat_fit, sigma0, p0, v_slab, n_threads = 1,
-                                blas_threads = 1, woodbury = FALSE)
+        
+        # run sutanoy's vsvb first
+        vsvb_result =
+          wpl_vsvb_regression(data_mat, weight_mat,
+                              sigma0, p0, v_slab, tune = TRUE)
+        
+        # use the the hyperparams selected there to fit ep
+        ep_fix_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                          sqrt(vsvb_result$sigma0sq), 
+                                          p0,
+                                          vsvb_result$v_slab, opt = FALSE)
+        
+        # using Nelder Mead hyperparam optimization
+        ep_opt_result = wpl_ep_regression(data_mat, weight_mat_fit, 
+                                          sigma0, 
+                                          p0,
+                                          v_slab, 
+                                          opt = TRUE)
         
         # compute accuracy metrics
         metrics = rbind(
-          score_model(mean_symmetrize(graphs[[1]]), true_graph_neg, 1, sim_idx, -.1, p),
-          score_model(mean_symmetrize(graphs[[2]]), true_graph_pos, 2, sim_idx, .1, p)
+          score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph_neg,
+                      1, sim_idx, -.1, p),
+          score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph_pos,
+                      2, sim_idx, .1, p),
+          
+          score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph_neg, 
+                      1, sim_idx, -.1, p),
+          score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph_pos, 
+                      2, sim_idx, .1, p),
+          
+          score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph_neg, 
+                      1, sim_idx, -.1, p),
+          score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph_pos, 
+                      2, sim_idx, .1, p)
         )
-        
         
         filename = paste0("data/discrete_dependent/",
                           Sys.Date(),

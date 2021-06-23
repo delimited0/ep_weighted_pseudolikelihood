@@ -2,8 +2,8 @@ library(future.apply)
 library(doFuture)
 library(data.table)
 
-wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab, 
-                          woodbury = FALSE) {
+wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, v_slab, 
+                          woodbury = FALSE, opt = TRUE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
   # RhpcBLASctl::blas_set_num_threads(blas_threads)
@@ -13,40 +13,50 @@ wpl_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
   n = nrow(weight_mat)
   
   sqrt_weight = sqrt(weight_mat)
+  
+  estimated_sigma_noise = rep(NA, p)
+  estimated_v_slab = rep(NA, p)
+  graphs = replicate(n, matrix(0, p, p), simplify = FALSE)
 
   progressr::with_progress({
     prog = progressr::progressor(along = 1:n)
-
-    graphs = lapply(1:n, function(i) {
-      
-
+    
+    for (i in 1:n) {
       prog(sprintf("Individual =%g", i))
-
-      incl_prob = sapply(1:p, function(resp_idx) {
-
+      
+      for (resp_idx in 1:p) {
+        
         y = data_mat[, resp_idx]
         X = data_mat[, -resp_idx]
         y_weighted = y * sqrt_weight[i, ]
         X_weighted = X * sqrt_weight[i, ]
-
+        
         fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, v_slab,
-                            woodbury = woodbury)
-
-        prob_row = matrix(0, nrow = 1, ncol = p)
-        prob_row[, -resp_idx] = t(plogis(fit$p))
-        return(prob_row)
-      })
-
-      return(incl_prob)
-    })
+                            woodbury = woodbury, opt = opt)
+        
+        graphs[[i]][resp_idx, -resp_idx] = t(plogis(fit$p))
+        estimated_sigma_noise[resp_idx] = fit$sigma0
+        estimated_v_slab[resp_idx] = fit$v_slab
+      }
+    }
   })
 
-  return(graphs)
+  return(list(graphs = graphs,
+              sigma_noise = estimated_sigma_noise,
+              v_slab = estimated_v_slab))
 }
 
 wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
+  
   p = ncol(data_mat)
   n = nrow(weight_mat)
+  
+  if (length(sigma0) == 1) {
+    sigma0 = rep(sigma0, p)
+  }
+  if (length(v_slab) == 1) {
+    v_slab = rep(v_slab, p)
+  }
   
   sqrt_weight = sqrt(weight_mat)
   
@@ -55,7 +65,6 @@ wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
     
     graphs = lapply(1:n, function(i) {
       
-      
       prog(sprintf("Individual =%g", i))
       
       incl_prob = sapply(1:p, function(resp_idx) {
@@ -65,7 +74,9 @@ wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
         y_weighted = y * sqrt_weight[i, ]
         X_weighted = X * sqrt_weight[i, ]
         
-        fit = epwpl::vb_wlr(X_weighted, y_weighted, sigma0, p0, v_slab)
+        browser()
+        fit = epwpl::vb_wlr(X_weighted, y_weighted, 
+                            sigma0[resp_idx], p0, v_slab[resp_idx])
         
         prob_row = matrix(0, nrow = 1, ncol = p)
         prob_row[, -resp_idx] = t(plogis(fit$logit_alpha))
@@ -79,7 +90,11 @@ wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
   return(graphs)
 }
 
-wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
+wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
+                               tune = FALSE, blas_threads = 1) {
+  
+  RhpcBLASctl::blas_set_num_threads(blas_threads)
+  RhpcBLASctl::omp_set_num_threads(blas_threads)
   
   n = nrow(data_mat)
   p = ncol(data_mat)-1
@@ -158,27 +173,31 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
     est_q = est_pi
     
     ####################tuning hyperparameters##################################
-    idmod = varbvs::varbvs(X_mat, y, Z=Z[, 1], verbose = FALSE)#Setting hyperparameter value as in Carbonetto Stephens model
-    inprob = idmod$pip
-    rest_index_set = setdiff(c(1:(p+1)), resp_index)
-    
-    sigmasq = mean(idmod$sigma)
-    pi_est = mean(1 / (1 + exp(-idmod$logodds)))
-    sigmavec = c(0.01, 0.05, 0.1, 0.5, 1, 3, 7, 10)
-    elb1 = matrix(0, length(sigmavec), 1)
-    
-    for (j in 1:length(sigmavec)) {
-      res = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
-                            weight_mat, D_long, sigmasq, sigmabeta_sq,
-                            y_long_vec, X_vec, true_pi)
-      elb1[j] = res$var.elbo
+    if (tune) {
+      idmod = varbvs::varbvs(X_mat, y, Z=Z[, 1], verbose = FALSE)#Setting hyperparameter value as in Carbonetto Stephens model
+      inprob = idmod$pip
+      rest_index_set = setdiff(c(1:(p+1)), resp_index)
       
+      sigmasq = mean(idmod$sigma)
+      pi_est = mean(1 / (1 + exp(-idmod$logodds)))
+      sigmavec = c(0.01, 0.05, 0.1, 0.5, 1, 3, 7, 10)
+      elb1 = matrix(0, length(sigmavec), 1)
+      
+      for (j in 1:length(sigmavec)) {
+        res = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
+                              weight_mat, D_long, sigmasq, sigmabeta_sq,
+                              y_long_vec, X_vec, true_pi)
+        elb1[j] = res$var.elbo
+        
+      }
+      sigmabeta_sq = sigmavec[which.max(elb1)] #Choosing hyperparameter based on ELBO maximization
+      true_pi = pi_est
     }
-    sigmabeta_sq = sigmavec[which.max(elb1)] #Choosing hyperparameter based on ELBO maximization
     
     result = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
                              weight_mat, D_long, sigmasq, sigmabeta_sq,
                              y_long_vec, X_vec, true_pi)
+    
     incl_prob = result$var.alpha
     mu0_val = result$var.mu0_lambda
     
@@ -187,7 +206,13 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
     mylist[[resp_index]] = heat_alpha
   }
   
-  return(vsvb_to_graphs(mylist))
+  result = list(
+    graphs = vsvb_to_graphs(mylist),
+    sigma0sq = sigmasq,
+    v_slab = sigmabeta_sq
+  )
+  
+  return(result)
 }
 
 mean_symmetrize = function(mat) {
@@ -210,7 +235,8 @@ max_symmetrize = function(mat) {
   return(mat)
 }
 
-score_model = function(graph, true_graph, individual, simulation, covariate, p) {
+score_model = function(method = "method", graph, true_graph, individual, 
+                       simulation, covariate, p) {
   
   if (is.null(p)) {
     p = nrow(graph) - 1
@@ -219,6 +245,7 @@ score_model = function(graph, true_graph, individual, simulation, covariate, p) 
   est_graph = 1 * (graph > 0.5)
   
   data.table(
+    method = method,
     sensitivity = sum(est_graph & true_graph) / sum(true_graph),
     specificity = sum(!est_graph & !true_graph) / sum(!true_graph),
     individual = individual, 
