@@ -2,7 +2,7 @@ library(future.apply)
 library(doFuture)
 library(data.table)
 
-wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, v_slab, 
+wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab, 
                           woodbury = FALSE, opt = TRUE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
@@ -17,6 +17,7 @@ wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
   estimated_sigma_noise = rep(NA, p)
   estimated_v_slab = rep(NA, p)
   graphs = replicate(n, matrix(0, p, p), simplify = FALSE)
+  llik = 0
 
   progressr::with_progress({
     prog = progressr::progressor(along = 1:n)
@@ -31,19 +32,22 @@ wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
         y_weighted = y * sqrt_weight[i, ]
         X_weighted = X * sqrt_weight[i, ]
         
-        fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, v_slab,
+        fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, s_slab,
                             woodbury = woodbury, opt = opt)
         
         graphs[[i]][resp_idx, -resp_idx] = t(plogis(fit$p))
         estimated_sigma_noise[resp_idx] = fit$sigma0
         estimated_v_slab[resp_idx] = fit$v_slab
+        
+        llik = llik + fit$llik
       }
     }
   })
 
   return(list(graphs = graphs,
               sigma_noise = estimated_sigma_noise,
-              v_slab = estimated_v_slab))
+              v_slab = estimated_v_slab,
+              llik = llik))
 }
 
 wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
@@ -91,7 +95,8 @@ wpl_vb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab) {
 }
 
 wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
-                               tune = FALSE, blas_threads = 1) {
+                               tune = FALSE, blas_threads = 1,
+                               tune_p0 = TRUE) {
   
   RhpcBLASctl::blas_set_num_threads(blas_threads)
   RhpcBLASctl::omp_set_num_threads(blas_threads)
@@ -100,6 +105,8 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
   p = ncol(data_mat)-1
   
   mylist = rep(list(matrix(0, n, p)), p+1)
+  
+  dim_elbos = rep(NA, p+1)
   
   for (resp_index in 1:(p+1)) {
     
@@ -191,7 +198,9 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
         
       }
       sigmabeta_sq = sigmavec[which.max(elb1)] #Choosing hyperparameter based on ELBO maximization
-      true_pi = pi_est
+      
+      if (tune_p0)
+        true_pi = pi_est
     }
     
     result = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
@@ -204,12 +213,14 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
     heat_alpha = matrix(incl_prob, n, p, byrow=TRUE)
     
     mylist[[resp_index]] = heat_alpha
+    dim_elbos[resp_index] = result$var.elbo
   }
   
   result = list(
     graphs = vsvb_to_graphs(mylist),
     sigma0sq = sigmasq,
-    v_slab = sigmabeta_sq
+    v_slab = sigmabeta_sq,
+    elbo = sum(dim_elbos)
   )
   
   return(result)
@@ -236,7 +247,7 @@ max_symmetrize = function(mat) {
 }
 
 score_model = function(method = "method", graph, true_graph, individual, 
-                       simulation, covariate, p) {
+                       simulation, covariate, p, w = 1) {
   
   if (is.null(p)) {
     p = nrow(graph) - 1
@@ -251,11 +262,26 @@ score_model = function(method = "method", graph, true_graph, individual,
     individual = individual, 
     simulation = simulation,
     covariate = covariate,
+    p = p,
+    w = w
+  )
+}
+
+incl_prob_model = function(method = "method", graph, individual, simulation, 
+                           covariate, p) {
+  
+  data.table(
+    method = method,
+    incl_prob_12 = graph[1, 2],
+    incl_prob_13 = graph[1, 3],
+    individual = individual,
+    simulation = simulation,
+    covariate = covariate,
     p = p
   )
 }
 
-weight_matrix = function(n, cov_mat) {
+weight_matrix = function(n, cov_mat, tau) {
   p = ncol(cov_mat)
   
   weight_mat = matrix(1, n, n)

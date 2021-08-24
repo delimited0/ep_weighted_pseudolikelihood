@@ -113,6 +113,8 @@ plt = ggplot(wide_sim_long, aes(x = value, fill = as.factor(covariate))) +
         legend.position = "bottom") +
   labs(fill = "Covariate")
 
+
+
 # 3 covariate levels ------------------------------------------------------
 
 set.seed(1)

@@ -1,14 +1,8 @@
-#' vectorized logsumexp function
-log_sum_exp = function(u, v) {
-  maxuv = pmax(u, v)
-  maxuv + log(exp(u - maxuv) + exp(v - maxuv))
-}
-
 #' @param X covariate matrix (n x p)
 #' @param y response vector (n x 1)
 #' @param sigma0 noise standard deviation
 #' @param p0 prior inclusion probability
-#' @param v_slab slab prior variance
+#' @param s_slab slab prior standard deviation
 #' @param v_inf infinite site variance stand in
 #' @param max_iter maximum number of iterations
 #' @param delta convergence parameter change threshold
@@ -16,11 +10,13 @@ log_sum_exp = function(u, v) {
 #' @param woodbury boolean, use woodbury form of update for V or not?
 #' @param opt boolean, optimize hyperparameters or not?
 #' @export
-ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200, 
+ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200, 
                   delta = 1e-4, k = .99, woodbury = FALSE, opt = TRUE) {
   
   d = ncol(X)
   n = length(y)
+  
+  v_slab = s_slab^2  # inputs are always stddev, but algorithm works with var
   
   m = rep(0, d)
   v = rep(Inf, d)
@@ -58,6 +54,7 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
   converged = FALSE
   iter = 1
   eps = 1
+  mlik_value = NA
   
   # EP iterations ----
   
@@ -75,7 +72,7 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
       plogis(-p_site2 - p_site3) * (m_site1 / v_site1)
     b = plogis(p_site2 + p_site3) * ((m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab)^2) +
       plogis(-p_site2 - p_site3) * ((m_site1 / v_site1)^2 - (1 / v_site1))
-
+    
     v_site2_undamp = (1 / (a^2 - b)) - v_site1
     
     # deal with negative variance
@@ -92,7 +89,7 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
     XV_tX = X %*% V_site2 %*% t(X)
     if (woodbury) 
       V = V_site2 - V_site2 %*% t(X) %*% 
-        solve( sigma0^2*In + XV_tX, X %*% V_site2 )
+      solve( sigma0^2*In + XV_tX, X %*% V_site2 )
     else {
       V = solve(V_site2_inv + (tXX / sigma0^2))
     }
@@ -125,50 +122,54 @@ ep_wlr = function(X, y, sigma0, p0, v_slab, v_inf = 100, max_iter = 200,
       mlik = function(params) {
         sigma0 = params[1]
         v_slab = params[2]
-  
+        
         logs1 = .5*(
           tmtXy / sigma0^2 - n * log(sigma0^2) - (yty / sigma0^2) -
-          determinant(In + (XV_tX / sigma0^2))$modulus
+            determinant(In + (XV_tX / sigma0^2))$modulus
         )
-  
+        
         logc = log_sum_exp(
           sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
           sigm_mp_site3_dnorm
         )
         logs2 = sum(logc)
         value = logs1 + logs2
-  
+        
         return(-value)
       }
       hyper_opt = dfoptim::nmkb(par = c(sigma0, v_slab), 
                                 fn = mlik,
                                 lower = c(0, 0), upper = c(Inf, Inf))
-                                
-                                # fn = mlik_obj,
-                                # n = n, tmtXy = tmtXy, yty = yty, In = In,
-                                # XV_tX = XV_tX,
-                                # sigm_p_site3 = sigm_p_site3,
-                                # sigm_mp_site3_dnorm = sigm_mp_site3_dnorm,
-                                # m_site1 = m_site1, v_site1 = v_site1)
-  
+      
+      # fn = mlik_obj,
+      # n = n, tmtXy = tmtXy, yty = yty, In = In,
+      # XV_tX = XV_tX,
+      # sigm_p_site3 = sigm_p_site3,
+      # sigm_mp_site3_dnorm = sigm_mp_site3_dnorm,
+      # m_site1 = m_site1, v_site1 = v_site1)
+      
       sigma0 = hyper_opt$par[1]
       v_slab = hyper_opt$par[2]
+      mlik_value = -hyper_opt$value
     }
-          
+    
     iter = iter + 1
   }
   
   result <- list(
     m = m,
     v = v,
-    p = p,
+    logisp = p,
+    p = plogis(p),
     iters = iter,
     sigma0 = sigma0,
-    v_slab = v_slab
+    v_slab = v_slab,
+    llik = mlik_value
   )
   
   return(result)
 }
+
 
 mlik_obj = function(params, n, tmtXy, yty, In, XV_tX,
                      sigm_p_site3, sigm_mp_site3_dnorm,

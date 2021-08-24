@@ -27,6 +27,9 @@ result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
 tictoc::toc()
 result$m
 
+# ep, also optimize p0
+result_p0 = epwpl::ep_wlr_nmp(X, y, sigma0, p0, v_slab)
+
 microbenchmark::microbenchmark(
   result = epwpl::ep_wlr(X, y, sigma0, p0, v_slab, max_iter = 2000)
 )
@@ -37,7 +40,10 @@ mcmc_result = BoomSpikeSlab::lm.spike(y ~ X - 1, niter = 5000)
 
 # compare to home rolled vsvb
 dp_result = vb_wlr(X, y, result$sigma0, p0, result$v_slab)
+dp_result2 = vb_wlr(X, y, result$sigma0, .9, result$v_slab)
 
+# compare to carbonetto stephens
+varbvs_result = varbvs::varbvs(X = X, y = y, Z = NULL)
 
 # Bigger example ----------------------------------------------------------
 

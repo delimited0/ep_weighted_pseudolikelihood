@@ -52,6 +52,8 @@ v_slab = 3
 
 n_sim = 50
 
+cvx_wgts = c(.25, .5, .75)
+
 progressr::with_progress({
   prog = progressr::progressor(along = 1:n_sim)
   
@@ -92,22 +94,52 @@ progressr::with_progress({
       
       metrics = rbind(
         score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 1),
         score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
-                    2, sim_idx, .1, p),
+                    2, sim_idx, .1, p, 1),
 
         score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph, 
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 0),
         score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph, 
-                    2, sim_idx, .1, p),
+                    2, sim_idx, .1, p, 0),
         
         score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph, 
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 0),
         score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph, 
-                    2, sim_idx, .1, p)
+                    2, sim_idx, .1, p, 0)
       )
       
-      return(metrics)
+      combo_metrics = rbindlist(lapply(cvx_wgts, function(w) {
+        rbind(
+          score_model("combo", 
+                      mean_symmetrize(w * vsvb_result$graphs[[1]] + 
+                                        (1-w) * ep_fix_result$graphs[[1]]),
+                      true_graph,
+                      1, sim_idx, -.1, p, w),
+          score_model("combo",
+                      mean_symmetrize(w * vsvb_result$graphs[[n]] + 
+                                        (1-w) * ep_fix_result$graphs[[2]]),
+                      true_graph,
+                      1, sim_idx, .1, p, w)
+        )
+      }))
+      
+      # incl_prob = list(
+      #   vsvb = vsvb_result,
+      #   ep_fix = ep_fix_result,
+      #   ep_opt = ep_opt_result
+      # )
+      # filename = paste0("data/discrete_independent_graph/",
+      #                   Sys.Date(),
+      #                   "_sim_idx=", sim_idx,
+      #                   "_graphs.RDS")
+      # saveRDS(incl_prob, file = filename)
+      
+      filename = paste0("data/discrete_independent/",
+                        Sys.Date(), 
+                        "_sim_idx" = sim_idx,
+                        "_covariate_independent.RDS")
+      saveRDS(rbind(metrics, combo_metrics), file = filename)
     }
   )
 })
@@ -150,6 +182,8 @@ v_slab = 3
 
 n_sim = 50
 
+cvx_wgts = c(.25, .5, .75)
+
 progressr::with_progress({
   prog = progressr::progressor(along = 1:n_sim)
 
@@ -186,22 +220,43 @@ progressr::with_progress({
       # compute accuracy metrics
       metrics = rbind(
         score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 1),
         score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
-                    2, sim_idx, .1, p),
+                    2, sim_idx, .1, p, 1),
         
         score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph, 
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 0),
         score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph, 
-                    2, sim_idx, .1, p),
+                    2, sim_idx, .1, p, 0),
         
         score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph, 
-                    1, sim_idx, -.1, p),
+                    1, sim_idx, -.1, p, 0),
         score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph, 
-                    2, sim_idx, .1, p)
+                    2, sim_idx, .1, p, 0)
       )
       
-      return(metrics)
+      combo_metrics = rbindlist(lapply(cvx_wgts, function(w) {
+        rbind(
+          score_model("combo", 
+                      mean_symmetrize(w * vsvb_result$graphs[[1]] + 
+                                        (1-w) * ep_fix_result$graphs[[1]]),
+                      true_graph,
+                      1, sim_idx, -.1, p, w),
+          score_model("combo",
+                      mean_symmetrize(w * vsvb_result$graphs[[n]] + 
+                                        (1-w) * ep_fix_result$graphs[[2]]),
+                      true_graph,
+                      1, sim_idx, .1, p, w)
+        )
+      }))
+      
+      filename = paste0("data/no_covariate/",
+                        Sys.Date(), 
+                        "_sim_idx" = sim_idx,
+                        "no_covariate.RDS")
+      saveRDS(rbind(metrics, combo_metrics), file = filename)
+      
+      # return(metrics)
     }
   )
 })
@@ -369,6 +424,7 @@ progressr::with_progress({
       for(i in 1:n) {
         X[i, ] = MASS::mvrnorm(1, rep(0, p+1), Var_cont(Z[i]))
       }
+      data_mat = X
       
       # weight matrix
       
@@ -381,32 +437,49 @@ progressr::with_progress({
       for(i in 1:n){
         D[, i] = n*(D[,i] / sum(D[,i]))
       }
+      weight_mat = D
       
-      graphs = wpl_regression(X, D, sigma0, p0, v_slab, n_threads = 1,
-                              blas_threads = 1, woodbury = FALSE)
+      # run sutanoy's vsvb first
+      vsvb_result =
+        wpl_vsvb_regression(data_mat, weight_mat,
+                            sigma0, p0, v_slab, tune = TRUE)
       
-      incl_prob = vector("list", length(graphs))
+      # use the the hyperparams selected there to fit ep
+      ep_fix_result = wpl_ep_regression(data_mat, weight_mat, 
+                                        sqrt(vsvb_result$sigma0sq), 
+                                        p0,
+                                        vsvb_result$v_slab, opt = FALSE)
       
-      for (i in 1:length(graphs)) {
-        
-        graph = graphs[[i]]
-        
-        for(k in 1:(p+1)) {
-          for(j in k:(p+1)) {
-            graph[k, j] = mean(c(graph[k, j], graph[j, k]))
-            graph[j, k] = graph[k, j]
-          }
-        }
-        
-        incl_prob[[i]] = data.table(
-          incl_prob_12 = graph[1, 2],
-          incl_prob_13 = graph[1, 3],
-          individual = i,
-          simulation = sim_idx
-        )
-      }
+      # using Nelder Mead hyperparam optimization
+      ep_opt_result = wpl_ep_regression(data_mat, weight_mat, 
+                                        sigma0, 
+                                        p0,
+                                        v_slab, 
+                                        opt = TRUE)
       
-      return(rbindlist(incl_prob))
+      
+      vsvb_probs = rbindlist(lapply(1:n, function(indiv) {
+        graph = vsvb_result$graphs[[indiv]]
+        incl_prob_model("VB", mean_symmetrize(graph), indiv, sim_idx, Z[indiv, ], p) 
+      }))
+      
+      ep_fix_probs = rbindlist(lapply(1:n, function(i) {
+        graph = ep_fix_result$graphs[[i]]
+        incl_prob_model("EP_fix", mean_symmetrize(graph), i, sim_idx, Z[i, ], p) 
+      }))
+      
+      ep_opt_probs = rbindlist(lapply(1:n, function(i) {
+        graph = ep_opt_result$graphs[[i]]
+        incl_prob_model("EP_opt", mean_symmetrize(graph), i, sim_idx, Z[i, ], p) 
+      }))
+
+      probs = rbind(vsvb_probs, ep_fix_probs, ep_opt_probs)
+      
+      filename = paste0("data/continuous/",
+                        Sys.Date(),
+                        "_sim=", sim_idx,
+                        "_p=", p, "_dependent_covariate.RDS")
+      saveRDS(probs, file = filename)
     }
 })
 

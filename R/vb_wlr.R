@@ -70,7 +70,8 @@ vb_wlr = function(X, y, sigma_noise, p0, v_slab,
     var = ssq,
     iters = iter,
     sigma0 = sigma0,
-    v_slab = v_slab
+    v_slab = v_slab,
+    elbo = elbo_obj(sigma_noise, v_slab, X, y, ssq, mu, alpha, p0)
   )
 }
 
@@ -88,9 +89,9 @@ vb_wlr = function(X, y, sigma_noise, p0, v_slab,
 #   return(t1 + t2 + t3 + t4 + t5 + t6)
 # }
 
-elbo_obj = function(params, X, y, ssq, mu, alpha, p0) {
-  sigma_noise = params[1]
-  v_slab = params[2]
+elbo_obj = function(sigma_noise, v_slab, X, y, ssq, mu, alpha, p0) {
+  # sigma_noise = params[1]
+  # v_slab = params[2]
   
   t1 = -sum( (y - X %*% (mu * alpha))^2 ) / (2*sigma_noise^2)
   t2 = -sum( X^2 %*% (alpha * (mu^2 + ssq) - alpha^2 * mu^2) ) / (2*sigma_noise^2)
@@ -103,3 +104,19 @@ elbo_obj = function(params, X, y, ssq, mu, alpha, p0) {
   
   return(t1 + t2 + t3 + t4 + t5 + t6)
 }
+# 
+# elbo_obj = function(params, X, y, ssq, mu, alpha, p0) {
+#   sigma_noise = params[1]
+#   v_slab = params[2]
+#   
+#   t1 = -sum( (y - X %*% (mu * alpha))^2 ) / (2*sigma_noise^2)
+#   t2 = -sum( X^2 %*% (alpha * (mu^2 + ssq) - alpha^2 * mu^2) ) / (2*sigma_noise^2)
+#   t3 = sum( alpha * ((1 + log(ssq))) ) / 2
+#   t4 = -sum( alpha * log((alpha + 1e-5) / p0) + 
+#                (1-alpha)*log((1-alpha + 1e-5) / (1 - p0)) )
+#   t5 = -sum( alpha * ((mu^2 + ssq) / (2*sigma_noise^2*v_slab) + 
+#                         log(sigma_noise^2*v_slab) / 2) )
+#   t6 = sum( .5*log(1 / (2 * pi * sigma_noise^2)) )
+#   
+#   return(t1 + t2 + t3 + t4 + t5 + t6)
+# }
