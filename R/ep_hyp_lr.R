@@ -30,13 +30,12 @@ ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
                  opt = FALSE)
     
     mliks[i] = fit$llik
-    post_incls[i, ] = fit$p
+    post_incls[, i] = fit$p
   }
   
   weights = mliks / sum(mliks)
-  weight_mat = matrix(weights, nrow = p)
   
-  pip = sum(fit$p * weights)
+  pip = post_incls * weights
   
   result = list(
     pip = 
