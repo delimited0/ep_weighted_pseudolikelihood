@@ -181,7 +181,8 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
     
     ####################tuning hyperparameters##################################
     if (tune) {
-      idmod = varbvs::varbvs(X_mat, y, Z=Z[, 1], verbose = FALSE)#Setting hyperparameter value as in Carbonetto Stephens model
+      # what should the covariate of varbvs, Z argument, be here?
+      idmod = varbvs::varbvs(X_mat, y, Z=weight_mat[, 1], verbose = FALSE)#Setting hyperparameter value as in Carbonetto Stephens model
       inprob = idmod$pip
       rest_index_set = setdiff(c(1:(p+1)), resp_index)
       
@@ -192,7 +193,7 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
       
       for (j in 1:length(sigmavec)) {
         res = epwpl::cov_vsvb(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, 
-                              weight_mat, D_long, sigmasq, sigmabeta_sq,
+                              weight_mat, D_long, sigmasq, sigmavec[j],
                               y_long_vec, X_vec, true_pi)
         elb1[j] = res$var.elbo
         
@@ -287,7 +288,7 @@ weight_matrix = function(n, cov_mat, tau) {
   weight_mat = matrix(1, n, n)
   for(i in 1:n){
     for(j in 1:n){
-      weight_mat[i, j] = dnorm(norm(Z[i, ] - Z[j, ], "2"), 0, tau)
+      weight_mat[i, j] = dnorm(norm(cov_mat[i, ] - cov_mat[j, ], "2"), 0, tau)
     }
   }
   

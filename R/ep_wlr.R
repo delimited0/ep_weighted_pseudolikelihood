@@ -1,8 +1,8 @@
 #' @param X covariate matrix (n x p)
 #' @param y response vector (n x 1)
-#' @param sigma0 noise standard deviation
-#' @param p0 prior inclusion probability
-#' @param s_slab slab prior standard deviation
+#' @param v_noise noise variance hyperparameter
+#' @param v_slab slab variance hyperparameter
+#' @param p_incl inclusion probability hyperparameter
 #' @param v_inf infinite site variance stand in
 #' @param max_iter maximum number of iterations
 #' @param delta convergence parameter change threshold
@@ -10,13 +10,11 @@
 #' @param woodbury boolean, use woodbury form of update for V or not?
 #' @param opt boolean, optimize hyperparameters or not?
 #' @export
-ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200, 
+ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200, 
                   delta = 1e-4, k = .99, woodbury = FALSE, opt = TRUE) {
   
   d = ncol(X)
   n = length(y)
-  
-  v_slab = s_slab^2  # inputs are always stddev, but algorithm works with var
   
   m = rep(0, d)
   v = rep(Inf, d)
@@ -35,19 +33,18 @@ ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200,
   # first updates ----
   
   # third factor
-  p_site3 = qlogis(p0)
+  p_site3 = qlogis(p_incl)
   
   # second factor
-  v_site2 = p0 * v_slab * rep(1, d)
+  v_site2 = p_incl * v_slab * rep(1, d)
   
   # first factor
   V_site2 = diag(v_site2)
   V_site2_inv = diag(1 / v_site2)
   V = V_site2 - V_site2 %*% t(X) %*%
-    solve( sigma0^2 * diag(n) + X %*% V_site2 %*% t(X), X %*% V_site2 )
-  # V = 
+    solve( v_noise * diag(n) + X %*% V_site2 %*% t(X), X %*% V_site2 )
   v = diag(V)
-  m = V %*% ( (1/sigma0^2) * tXy + V_site2_inv %*% m_site2 )
+  m = V %*% ( (1/v_noise) * tXy + V_site2_inv %*% m_site2 )
   v_site1 = 1 / ( (1 / v) - (1 / v_site2) )
   m_site1 = ( (m / v) - (m_site2 / v_site2) ) * v_site1
   
@@ -89,15 +86,15 @@ ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200,
     XV_tX = X %*% V_site2 %*% t(X)
     if (woodbury) 
       V = V_site2 - V_site2 %*% t(X) %*% 
-      solve( sigma0^2*In + XV_tX, X %*% V_site2 )
+      solve( v_noise*In + XV_tX, X %*% V_site2 )
     else {
-      V = solve(V_site2_inv + (tXX / sigma0^2))
+      V = solve(V_site2_inv + (tXX / v_noise))
     }
     
     v_old = v
     v = diag(V)
     m_old = m
-    m = V %*% ( (1/sigma0^2) * tXy + V_site2_inv %*% m_site2)
+    m = V %*% ( (1/v_noise) * tXy + V_site2_inv %*% m_site2)
     p = p_site2 + p_site3
     
     v_site1_undamp = 1 / ( (1 / v) - (1 / v_site2) )
@@ -110,48 +107,59 @@ ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200,
       converged = TRUE
     }
     
-    # optimize hyperparameters
-    # mv_sites = (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v)
-    # log1pvv = log(1 + (v_site2 / v_site1))
+    # pre compute marginal likelihood terms
     tmtXy = t(m) %*% tXy
-    sigm_p_site3 = plogis(p_site3, log.p = TRUE)
+    tmVm = t(m) %*% V_site2_inv %*% m_site2
+    tms2Vms2 = t(m_site2) %*% V_site2_inv %*% m_site2
+    # sigm_p_site3 = plogis(p_site3, log.p = TRUE)
     sigm_mp_site3_dnorm = plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+    sum_pmv3 = sum( (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v) )
     
+    mlik = function(params) {
+      v_noise = params[1]
+      v_slab = params[2]
+      
+      logs1 = .5*(
+        tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
+          tms2Vms2 -
+          determinant(In + (XV_tX / v_noise))$modulus + 
+          sum(log1p(v_site2 / v_site1)) + sum_pmv3
+      )
+      
+      logc = log_sum_exp(
+        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
+        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+      )
+      logs2 = .5*sum(
+        2*logc + log1p(v_site1 / v_site2) + sum_pmv3 + 
+        2*log_sum_exp(
+          plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
+          plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)
+        ) -
+        2*(plogis(p_site3, log.p=TRUE) + plogis(-p_site3, log.p=TRUE))
+      )
+      
+      value = logs1 + logs2 + .5*d*log(2*pi) +
+        .5*sum(log(v)) - .5*sum_pmv3 +
+        sum(log_sum_exp(
+          plogis(p_site2, log.p = TRUE) + plogis(p_site3, log.p = TRUE),
+          plogis(-p_site2, log.p = TRUE) + plogis(-p_site3, log.p = TRUE)
+        ))
+      
+      return(-value)
+    }
     
+    # optimize hyperparameters
     if (opt) {
-      mlik = function(params) {
-        sigma0 = params[1]
-        v_slab = params[2]
-        
-        logs1 = .5*(
-          tmtXy / sigma0^2 - n * log(sigma0^2) - (yty / sigma0^2) -
-            determinant(In + (XV_tX / sigma0^2))$modulus
-        )
-        
-        logc = log_sum_exp(
-          sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-          sigm_mp_site3_dnorm
-        )
-        logs2 = sum(logc)
-        value = logs1 + logs2
-        
-        return(-value)
-      }
-      hyper_opt = dfoptim::nmkb(par = c(sigma0, v_slab), 
+      hyper_opt = dfoptim::nmkb(par = c(v_noise, v_slab), 
                                 fn = mlik,
                                 lower = c(0, 0), upper = c(Inf, Inf))
       
-      # fn = mlik_obj,
-      # n = n, tmtXy = tmtXy, yty = yty, In = In,
-      # XV_tX = XV_tX,
-      # sigm_p_site3 = sigm_p_site3,
-      # sigm_mp_site3_dnorm = sigm_mp_site3_dnorm,
-      # m_site1 = m_site1, v_site1 = v_site1)
-      
-      sigma0 = hyper_opt$par[1]
+      v_noise = hyper_opt$par[1]
       v_slab = hyper_opt$par[2]
-      mlik_value = -hyper_opt$value
+      # mlik_value = -hyper_opt$value
     }
+    mlik_value = -mlik(c(v_noise, v_slab))
     
     iter = iter + 1
   }
@@ -162,50 +170,10 @@ ep_wlr = function(X, y, sigma0, p0, s_slab, v_inf = 100, max_iter = 200,
     logisp = p,
     p = plogis(p),
     iters = iter,
-    sigma0 = sigma0,
+    v_noise = v_noise,
     v_slab = v_slab,
     llik = mlik_value
   )
   
   return(result)
-}
-
-
-mlik_obj = function(params, n, tmtXy, yty, In, XV_tX,
-                     sigm_p_site3, sigm_mp_site3_dnorm,
-                     m_site1, v_site1) {
-  sigma0 = params[1]
-  v_slab = params[2]
-  
-  logs1 = .5 * (
-    # t(m) %*% (V_site2_inv %*% m_site2 + (tXy / sigma0^2)) -
-    tmtXy / sigma0^2 -
-      # n * log(2 * pi * sigma0^2) - 
-      n * log(sigma0^2) -
-      (yty / sigma0^2) - 
-      # t(m_site2) %*% V_site2_inv %*% m_site2 -
-      determinant(In + (XV_tX / sigma0^2))$modulus #+ 
-    # sum( log1pvv + mv_sites )
-  )
-  # logc = log_sum_exp(
-  #   plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-  #   plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
-  # )
-  logc = log_sum_exp(
-    sigm_p_site3 + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-    sigm_mp_site3_dnorm
-  )
-  # browser()
-  # logs2 = .5 * sum(
-  # 2*logc #+ 
-  # log1pvv + mv_sites + 
-  # 2*log( plogis(p) * plogis(-p_site3) + plogis(-p) * plogis(p_site3) ) -
-  # 2*log( plogis(p_site3) * plogis(-p_site3) )
-  # )
-  logs2 = sum(logc)
-  value = logs1 + logs2 #+ 
-  # .5*d*log(2*pi) #+ 
-  # .5 * sum(log(v) - mv_sites) +
-  # sum( log(plogis(p_site2) * plogis(p_site3) + plogis(-p_site2) * plogis(-p_site3)))
-  return(-value)
 }
