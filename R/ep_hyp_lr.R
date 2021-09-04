@@ -65,6 +65,8 @@ ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
   return(result)
 }
 
+#' group spike and slab prior
+#' @export
 ep_grid_gss = function(X, y, sigma, sa, logodds, verbose) {
   
   p = ncol(X)

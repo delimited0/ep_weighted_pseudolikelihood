@@ -3,7 +3,7 @@ library(doFuture)
 library(data.table)
 
 wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab, 
-                          woodbury = FALSE, opt = TRUE) {
+                             woodbury = FALSE, opt = TRUE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
   # RhpcBLASctl::blas_set_num_threads(blas_threads)
