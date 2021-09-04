@@ -1,4 +1,4 @@
-
+#' @export
 wpl_ep = function(data_mat, weight_mat, 
                   v_noise_grid, v_slab_grid, p_incl_grid, 
                   opt = TRUE) {
