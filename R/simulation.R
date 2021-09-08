@@ -2,7 +2,8 @@ library(future.apply)
 library(doFuture)
 library(data.table)
 
-wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab, 
+#' @export
+wpl_ep_regression = function(data_mat, weight_mat, v_noise, v_slab, p_incl,
                              woodbury = FALSE, opt = TRUE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
@@ -14,7 +15,7 @@ wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab,
   
   sqrt_weight = sqrt(weight_mat)
   
-  estimated_sigma_noise = rep(NA, p)
+  estimated_v_noise = rep(NA, p)
   estimated_v_slab = rep(NA, p)
   graphs = replicate(n, matrix(0, p, p), simplify = FALSE)
   llik = 0
@@ -32,11 +33,11 @@ wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab,
         y_weighted = y * sqrt_weight[i, ]
         X_weighted = X * sqrt_weight[i, ]
         
-        fit = epwpl::ep_wlr(X_weighted, y_weighted, sigma0, p0, s_slab,
+        fit = epwpl::ep_wlr(X_weighted, y_weighted, v_noise, v_slab, p_incl,
                             woodbury = woodbury, opt = opt)
         
-        graphs[[i]][resp_idx, -resp_idx] = t(plogis(fit$p))
-        estimated_sigma_noise[resp_idx] = fit$sigma0
+        graphs[[i]][resp_idx, -resp_idx] = t(fit$p)
+        estimated_v_noise[resp_idx] = fit$v_noise
         estimated_v_slab[resp_idx] = fit$v_slab
         
         llik = llik + fit$llik
@@ -45,7 +46,7 @@ wpl_ep_regression = function(data_mat, weight_mat, sigma0, p0, s_slab,
   })
 
   return(list(graphs = graphs,
-              sigma_noise = estimated_sigma_noise,
+              sigma_noise = estimated_v_noise,
               v_slab = estimated_v_slab,
               llik = llik))
 }
@@ -282,6 +283,7 @@ incl_prob_model = function(method = "method", graph, individual, simulation,
   )
 }
 
+#' @export
 weight_matrix = function(n, cov_mat, tau) {
   p = ncol(cov_mat)
   

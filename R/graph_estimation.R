@@ -13,7 +13,8 @@ wpl_ep = function(data_mat, weight_mat,
   sqrt_weight = sqrt(weight_mat)
   
   graphs = replicate(n, matrix(0, p, p), simplify = FALSE)
-  llik = 0
+  
+  # llik = 0
   
   progressr::with_progress({
     prog = progressr::progressor(along = 1:n)
@@ -29,15 +30,18 @@ wpl_ep = function(data_mat, weight_mat,
         X_weighted = X * sqrt_weight[i, ]
         
         fit = epwpl::ep_grid_gss(X_weighted, y_weighted, 
-                                 v_noise_grid, v_slab_grid, qlogis(p_incl_grid))
+                                 v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                 verbose=FALSE)
         
         graphs[[i]][resp_idx, -resp_idx] = t(plogis(fit$pip))
         
-        llik = llik + fit$llik
+        
+        # llik = llik + fit$llik
       }
     }
   })
   
-  return(list(graphs = graphs,
-              llik = llik))
+  return(list(graphs = graphs
+              # llik = llik
+              ))
 }

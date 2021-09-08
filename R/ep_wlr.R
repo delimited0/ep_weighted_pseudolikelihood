@@ -112,7 +112,9 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     tmVm = t(m) %*% V_site2_inv %*% m_site2
     tms2Vms2 = t(m_site2) %*% V_site2_inv %*% m_site2
     # sigm_p_site3 = plogis(p_site3, log.p = TRUE)
-    sigm_mp_site3_dnorm = plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+    # sigm_mp_site3_dnorm = 
+    #   plogis(-p_site3, log.p = TRUE) + 
+    #   dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
     sum_pmv3 = sum( (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v) )
     
     mlik = function(params) {
@@ -127,8 +129,8 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
       )
       
       logc = log_sum_exp(
-        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1 + v_slab, log = TRUE),
-        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, v_site1, log = TRUE)
+        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
       )
       logs2 = .5*sum(
         2*logc + log1p(v_site1 / v_site2) + sum_pmv3 + 

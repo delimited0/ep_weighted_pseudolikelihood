@@ -67,14 +67,14 @@ ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
 
 #' group spike and slab prior
 #' @export
-ep_grid_gss = function(X, y, sigma, sa, logodds, verbose) {
+ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE) {
   
   p = ncol(X)
   n = nrow(X)
   ns = length(sigma)
   
   mliks = rep(NA, ns)
-  post_incls = matrix(NA, p, ns)
+  logodds_incls = matrix(NA, p, ns)
   mu_mat = matrix(NA, p, ns)
   v_mat = matrix(NA, p, ns)
   
@@ -87,16 +87,18 @@ ep_grid_gss = function(X, y, sigma, sa, logodds, verbose) {
     p_incl = plogis(logodds[i])
     
     fit = GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p_incl, ncol(X)),
-                            v1 = v_slab)
+                            v1 = v_slab, verbose = verbose)
     
     mliks[i] = fit$evidence
-    post_incls[, i] = fit$posteriorApproximation$p
+    logodds_incls[, i] = fit$posteriorApproximation$p
     mu_mat[, i] = fit$meanMarginals
     v_mat[, i] = fit$varMarginals
     
     sigma_vec[i] = sigma[i]
     sa_vec[i] = sa[i]
   }
+  
+  post_incls = plogis(logodds_incls)
   
   weights = normalizelogweights(mliks)
   pip = post_incls %*% weights
