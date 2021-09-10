@@ -31,7 +31,9 @@ logit <- function(x) log(x / (1 - x))
 #
 
 #' @export
-GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, verbose = TRUE, initialApprox = NULL) {
+GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, 
+                              verbose = TRUE, initialApprox = NULL, opt = FALSE,
+                              delta = 1e-4, max_iter = 200) {
   
   # We compute some useful constants
   
@@ -66,7 +68,7 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, v
   convergence <- FALSE
   damping <- 0.5
   
-  while(iters < 1000 && ! convergence) {
+  while(iters < max_iter && ! convergence) {
     
     posteriorApproximationOld <- posteriorApproximation
     
@@ -75,9 +77,29 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, v
     if (any(c(p0) != 1))
       posteriorApproximation <- processPriorTerms(X, Y, v1, posteriorApproximation, damping)
     
+    # optimize the variance hyper parameters 
+    if (opt) {
+      
+      mlik = function(params) {
+        tau = params[1]
+        v1 = params[2]
+        
+        value = evaluateEvidence(X, Y, p0, posteriorApproximation, tau, rep(v1, nGroups))
+        return(-value)
+      }
+      
+      hyper_opt = dfoptim::nmkb(par = c(tau, v1[1]), 
+                                fn = mlik,
+                                lower = c(0, 0), 
+                                upper = c(Inf, Inf))
+      tau = hyper_opt$par[1]
+      v1 = rep(hyper_opt$par[2], nGroups)
+    }
+    
     # We look for convergence in the EP algorithm
     
-    convergence <- checkConvergence(posteriorApproximationOld, posteriorApproximation, verbose)
+    convergence <- checkConvergence(posteriorApproximationOld, posteriorApproximation, 
+                                    delta, verbose)
     
     iters <- iters + 1
     damping <- damping * 0.99
@@ -106,8 +128,15 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, v
   
   # We return the model evidence, the posterior approximation and the feature ranking
   
-  list(evidence = evidence, posteriorApproximation = posteriorApproximation, X = X, Y = Y, ranking = 
-         ranking, meanMarginals = meanMarginals, varMarginals = varMarginals)
+  list(evidence = evidence,
+       posteriorApproximation = posteriorApproximation, 
+       X = X, Y = Y, 
+       ranking = ranking, 
+       meanMarginals = meanMarginals, 
+       varMarginals = varMarginals, 
+       opt = opt,
+       v_noise = 1 / tau, 
+       v_slab = v1[1])
 }
 
 ##
@@ -246,13 +275,13 @@ processPriorTerms <- function(X, Y, v1, posteriorApproximation, damping) {
   logG1 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v1K), log = TRUE) 
   logG0 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v0K), log = TRUE)
   
-  Zj <- sigmoid(pOld) * exp(logG1) + sigmoid(- pOld) * exp(logG0)
+  Zj <- plogis(pOld) * exp(logG1) + plogis(- pOld) * exp(logG0)
   
-  c1 <- sigmoid(pOld + logG1 - logG0) * - meanMarinalsOld / (varMarginalsOld + v1K) + sigmoid(- pOld - logG1 + logG0) * 
+  c1 <- plogis(pOld + logG1 - logG0) * - meanMarinalsOld / (varMarginalsOld + v1K) + plogis(- pOld - logG1 + logG0) * 
     - meanMarinalsOld / (varMarginalsOld + v0K)
   
-  c2 <- (sigmoid(pOld + logG1 - logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v1K)^2 - 1 / (varMarginalsOld + v1K)) + 
-           sigmoid(- pOld - logG1 + logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v0K)^2 - 1 / (varMarginalsOld + v0K)))
+  c2 <- (plogis(pOld + logG1 - logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v1K)^2 - 1 / (varMarginalsOld + v1K)) + 
+           plogis(- pOld - logG1 + logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v0K)^2 - 1 / (varMarginalsOld + v0K)))
   
   c3 <- c1^2 - c2
   
@@ -311,7 +340,8 @@ processPriorTerms <- function(X, Y, v1, posteriorApproximation, damping) {
 # Returns: 	A boolean indicating convergence
 #
 
-checkConvergence <- function(posteriorApproximationOld, posteriorApproximationNew, verbose = FALSE) {
+checkConvergence <- function(posteriorApproximationOld, posteriorApproximationNew, 
+                             delta, verbose) {
   
   # We evaluate the maximum change within the posterior approximation
   
@@ -324,7 +354,7 @@ checkConvergence <- function(posteriorApproximationOld, posteriorApproximationNe
   if (verbose)
     cat("EP: max change", maxChange, "\n")
   
-  if (maxChange < 1e-5)
+  if (maxChange < delta)
     TRUE
   else
     FALSE
@@ -356,10 +386,10 @@ evaluateEvidence <- function(X, Y, p0, posteriorApproximation, tau, v1) {
   
   # We compute the log evidence step by step
   
-  prodActive <- tapply(sigmoid(posteriorApproximation$pjTilde), 
-                       as.factor(posteriorApproximation$groups), prod) * sigmoid(posteriorApproximation$p0)
-  prodInactive <- tapply(sigmoid(- posteriorApproximation$pjTilde), 
-                         as.factor(posteriorApproximation$groups), prod) * sigmoid(- posteriorApproximation$p0)
+  prodActive <- tapply(plogis(posteriorApproximation$pjTilde), 
+                       as.factor(posteriorApproximation$groups), prod) * plogis(posteriorApproximation$p0)
+  prodInactive <- tapply(plogis(- posteriorApproximation$pjTilde), 
+                         as.factor(posteriorApproximation$groups), prod) * plogis(- posteriorApproximation$p0)
   
   D_j <- prodActive + prodInactive
   
@@ -421,18 +451,18 @@ evaluateEvidence <- function(X, Y, p0, posteriorApproximation, tau, v1) {
   logG1 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v1K), log = TRUE) 
   logG0 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v0K), log = TRUE)
   
-  Zj <- sigmoid(pOld) * exp(logG1) + sigmoid(- pOld) * exp(logG0)
+  Zj <- plogis(pOld) * exp(logG1) + plogis(- pOld) * exp(logG0)
   
-  c1 <- sigmoid(pOld + logG1 - logG0) * - meanMarinalsOld / (varMarginalsOld + v1K) + 
-    sigmoid(- pOld - logG1 + logG0) * - meanMarinalsOld / (varMarginalsOld + v0K)
+  c1 <- plogis(pOld + logG1 - logG0) * - meanMarinalsOld / (varMarginalsOld + v1K) + 
+    plogis(- pOld - logG1 + logG0) * - meanMarinalsOld / (varMarginalsOld + v0K)
   
-  c2 <- (sigmoid(pOld + logG1 - logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v1K)^2 - 1 / (varMarginalsOld + v1K)) + 
-           sigmoid(- pOld - logG1 + logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v0K)^2 - 1 / (varMarginalsOld + v0K)))
+  c2 <- (plogis(pOld + logG1 - logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v1K)^2 - 1 / (varMarginalsOld + v1K)) + 
+           plogis(- pOld - logG1 + logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v0K)^2 - 1 / (varMarginalsOld + v0K)))
   
   c3 <- c1^2 - c2
   
-  log_s2j <- log(Zj) - log(sigmoid(pOld) * sigmoid(posteriorApproximation$pjTilde) + 
-                             sigmoid(-pOld) * sigmoid(-posteriorApproximation$pjTilde)) - 0.5 * log(2 * pi * posteriorApproximation$nujTilde) - 
+  log_s2j <- log(Zj) - log(plogis(pOld) * plogis(posteriorApproximation$pjTilde) + 
+                             plogis(-pOld) * plogis(-posteriorApproximation$pjTilde)) - 0.5 * log(2 * pi * posteriorApproximation$nujTilde) - 
     dnorm(0, meanMarinalsOld - posteriorApproximation$mujTilde, 
           sqrt(posteriorApproximation$nujTilde + varMarginalsOld), log = TRUE)
   
@@ -440,10 +470,10 @@ evaluateEvidence <- function(X, Y, p0, posteriorApproximation, tau, v1) {
   
   log_s3 <- 0
   
-  prodActive <- tapply(sigmoid(posteriorApproximation$pjTilde), 
-                       as.factor(posteriorApproximation$groups), prod) * sigmoid(posteriorApproximation$p0)
-  prodInactive <- tapply(sigmoid(- posteriorApproximation$pjTilde), 
-                         as.factor(posteriorApproximation$groups), prod) * sigmoid(- posteriorApproximation$p0)
+  prodActive <- tapply(plogis(posteriorApproximation$pjTilde), 
+                       as.factor(posteriorApproximation$groups), prod) * plogis(posteriorApproximation$p0)
+  prodInactive <- tapply(plogis(- posteriorApproximation$pjTilde), 
+                         as.factor(posteriorApproximation$groups), prod) * plogis(- posteriorApproximation$p0)
   
   D_j <- prodActive + prodInactive
   

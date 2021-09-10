@@ -102,6 +102,9 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     m_site1_undamp = ( (m / v) - (m_site2 / v_site2) ) * v_site1
     m_site1 = v_site1 * (eps * (m_site1_undamp / v_site1) + (1 - eps) * (m_site1 / v_site1))
     
+    # damp the updates
+    
+    
     # check convergence
     if (all(abs(v - v_old) < delta) & all(abs(m - m_old) < delta)) {
       converged = TRUE
@@ -125,15 +128,19 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
         tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
           tms2Vms2 -
           determinant(In + (XV_tX / v_noise))$modulus + 
-          sum(log1p(v_site2 / v_site1)) + sum_pmv3
+          sum(log1p(v_site2 / v_site1)) + 
+          sum_pmv3
       )
       
       logc = log_sum_exp(
         plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
         plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
       )
+      
       logs2 = .5*sum(
-        2*logc + log1p(v_site1 / v_site2) + sum_pmv3 + 
+        2*logc + 
+        log1p(v_site1 / v_site2) +
+        sum_pmv3 + 
         2*log_sum_exp(
           plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
           plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)

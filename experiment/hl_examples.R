@@ -33,8 +33,10 @@ tictoc::toc()
 result$m
 
 # group spike slab
+tictoc::tic()
 gss_result = epwpl::GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p0, ncol(X)),
-                                      v1 = v_slab)
+                                      v1 = v_slab, verbose=FALSE, opt=TRUE)
+tictoc::toc()
 
 # ep with grid prior and importance sampling
 n_grid = 50
@@ -45,7 +47,7 @@ p_incl_grid = seq(.01, .9, length.out = n_grid)
 # p_incl_grid = c(.109, .110, .111, .112)
 #
 is_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                           opt = FALSE)
+                           opt = TRUE)
 
 par(mfrow = c(1, 1))
 plot(p_incl_grid, is_result$mliks)
@@ -53,12 +55,15 @@ plot(p_incl_grid[1:20], is_result$mliks[1:20])
 plot(p_incl_grid, is_result$weights)
 
 # ep gss with prior grid and inportance sampling
-n_grid = 80
+n_grid = 10
 v_noise_grid = rep(v_noise, n_grid)
 v_slab_grid = rep(v_slab, n_grid)
 p_incl_grid = seq(.01, .9, length.out = n_grid)
 
-gss_result = epwpl::ep_grid_gss(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid))
+tictoc::tic()
+gss_result = epwpl::ep_grid_gss(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                opt=TRUE)
+tictoc::toc()
 
 plot(p_incl_grid, gss_result$mliks)
 plot(p_incl_grid[8:10], gss_result$mliks[8:10])
@@ -110,19 +115,31 @@ dp_result2 = vb_wlr(X, y, result$sigma0, .9, result$v_slab)
 
 d = 100
 n = 100
-X = cbind(1, mvtnorm::rmvnorm(n, rep(0, d), 5.*diag(d) + .5*rep(1, d) %*% t(rep(1, d))))
-w = c(1, rep(1, 10), rep(0, d-10))
+X = cbind(mvtnorm::rmvnorm(n, rep(0, d), 5.*diag(d) + .5*rep(1, d) %*% t(rep(1, d))))
+w = c(rep(1, 10), rep(0, d-10))
 
 v_noise = 1/10
-y = rnorm(n, X %*% w, sigma_noise)
+y = rnorm(n, X %*% w, sqrt(v_noise))
 
 p0 = .1
 v_slab = .1
 
 tictoc::tic()
-result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, max_iter = 200)
+result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, 
+                       max_iter = 1000,
+                       opt=TRUE,
+                       woodbury = FALSE)
 tictoc::toc()
-result$m
+
+tictoc::tic()
+gss_result = epwpl::GroupSpikeAndSlab(X, y, 
+                                      tau = 1 / v_noise, 
+                                      groups = 1:d,
+                                      p1 = rep(p0, d),
+                                      v1 = v_slab, 
+                                      verbose = TRUE, 
+                                      opt=TRUE)
+tictoc::toc()
 
 n_grid = 20
 v_noise_grid = rep(result$v_noise, n_grid)

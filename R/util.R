@@ -1,4 +1,5 @@
 #' vectorized logsumexp function
+#' element wise computation of logsumexp
 log_sum_exp = function(u, v) {
   maxuv = pmax(u, v)
   maxuv + log(exp(u - maxuv) + exp(v - maxuv))
