@@ -8,8 +8,8 @@
 #'
 #' uniform discrete grid hyperprior
 #' assume prior logodds all the same for now
-ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
-                      delta = 1e-4, k = .99, woodbury = FALSE, opt = TRUE) {
+ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
+                      delta = 1e-4, k = .99, eps = .5, woodbury = FALSE, opt = TRUE) {
   
   p = ncol(X)
   n = nrow(X)
@@ -32,6 +32,7 @@ ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
                  v_inf = v_inf, 
                  max_iter = max_iter,
                  delta = delta,
+                 eps = eps,
                  k = k,  
                  woodbury = woodbury,
                  opt = opt)
@@ -67,7 +68,9 @@ ep_grid_lr = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
 
 #' group spike and slab prior
 #' @export
-ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE) {
+ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE,
+                       damping = .5, k = .99, 
+                       opt_lower = c(0, 0), opt_upper = c(Inf, Inf)) {
   
   p = ncol(X)
   n = nrow(X)
@@ -92,7 +95,8 @@ ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE) {
     p_incl = plogis(logodds[i])
     
     fit = GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p_incl, ncol(X)),
-                            v1 = v_slab, verbose = FALSE, opt = opt)
+                            v1 = v_slab, verbose = FALSE, opt = opt,
+                            damping = damping, k = k)
     
     mliks[i] = fit$evidence
     logodds_incls[, i] = fit$posteriorApproximation$p

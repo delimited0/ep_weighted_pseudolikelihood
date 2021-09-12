@@ -32,18 +32,19 @@ weight_mat_fit = weight_mat[c(1, n), ]
 v_noise = 1
 v_slab = 3
 # p_incl_grid = seq(1, p) / (p+1)
-p_incl_grid = seq(.3, .7, .1)
+# p_incl_grid = seq(.3, .7, .1)
+p_incl_grid = seq(.05, .25, .05)
 # p_incl_grid = .5
 n_pip = length(p_incl_grid)
 
-v_noise_grid = rep(v_noise, n_pip)
-v_slab_grid = rep(v_slab, n_pip)
+# v_noise_grid = rep(v_noise, n_pip)
+# v_slab_grid = rep(v_slab, n_pip)
 
 # v_noise_grid = c(0.01, 0.05, 0.1, 0.5, 1, 3, 7, 10)
 # v_slab_grid = c(0.01, 0.05, 0.1, 0.5, 1, 3, 7, 10)
 
-# v_noise_grid = c(0.01, 0.05, 0.1, 0.5, 1)
-# v_slab_grid = c(0.01, 0.05, 0.1, 0.5, 1)
+v_noise_grid = c(0.01, 0.05, 0.1, 0.5, 1)
+v_slab_grid = c(0.01, 0.05, 0.1, 0.5, 1)
 
 # simulate the data for this iteration
 X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
@@ -59,17 +60,44 @@ theta = expand.grid(list(
 ))
 
 tictoc::tic()
-result = epwpl::wpl_ep(data_mat, weight_mat_fit, 
+result_fix = epwpl::wpl_ep_gss(data_mat, weight_mat_fit, 
                        theta$v_noise, 
                        theta$v_slab, 
                        theta$p0, opt=FALSE, verbose=TRUE)
 tictoc::toc()
 
+tictoc::tic()
+result_fix = epwpl::wpl_ep(data_mat, weight_mat_fit, 
+                           theta$v_noise, 
+                           theta$v_slab, 
+                           theta$p0, 
+                           damping = 1, k = .99,
+                           opt=FALSE, verbose=TRUE)
+tictoc::toc()
+
 # optimize over variances, average over only inclusion probabilities
-result = epwpl::wpl_ep(data_mat, weight_mat_fit, 
-                       v_noise_grid, 
-                       v_slab_grid, 
-                       p_incl_grid, opt=TRUE, verbose=TRUE)
+result_opt = epwpl::wpl_ep_gss(data_mat, weight_mat_fit, 
+                           v_noise_grid, 
+                           v_slab_grid, 
+                           p_incl_grid,
+                           damping = 1, k = .99,
+                           opt=TRUE, verbose=TRUE,
+                           opt_upper = c(1000, Inf))
+
+tictoc::tic()
+result_opt = epwpl::wpl_ep(data_mat, weight_mat_fit, 
+                           rep(v_noise, n_pip), 
+                           rep(v_slab, n_pip), 
+                           p_incl_grid,
+                           damping = 1, k = .99,
+                           opt=TRUE, verbose=TRUE)
+tictoc::toc()
+
+# fix inclusion probability, optimize over variances (the old setting)
+result_opt2 = epwpl::wpl_ep(data_mat, weight_mat_fit,
+                            v_noise, v_slab, .5,
+                            damping = .9, k = .99,
+                            opt=TRUE, verbose=TRUE)
 
 # debug individual 2, dim 2, hyperparam 3 (p = .5), singular matrix
 i = 2

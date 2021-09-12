@@ -33,7 +33,9 @@ logit <- function(x) log(x / (1 - x))
 #' @export
 GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1, 
                               verbose = TRUE, initialApprox = NULL, opt = FALSE,
-                              delta = 1e-4, max_iter = 200) {
+                              delta = 1e-4, max_iter = 200,
+                              damping = .5, k = .99,
+                              opt_lower = c(0, 0), opt_upper = c(Inf, Inf)) {
   
   # We compute some useful constants
   
@@ -66,7 +68,6 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1,
   
   iters <- 0
   convergence <- FALSE
-  damping <- 0.5
   
   while(iters < max_iter && ! convergence) {
     
@@ -88,10 +89,11 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1,
         return(-value)
       }
       
-      hyper_opt = dfoptim::nmkb(par = c(tau, v1[1]), 
+      hyper_opt = dfoptim::nmkb(par = c(tau, v1[1]),
                                 fn = mlik,
-                                lower = c(0, 0), 
-                                upper = c(Inf, Inf))
+                                lower = opt_lower,
+                                upper = opt_upper)
+
       tau = hyper_opt$par[1]
       v1 = rep(hyper_opt$par[2], nGroups)
     }
@@ -102,7 +104,7 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1,
                                     delta, verbose)
     
     iters <- iters + 1
-    damping <- damping * 0.99
+    damping <- damping * k
   }
   
   # We evaluate the models evidence
@@ -136,7 +138,8 @@ GroupSpikeAndSlab <- function(X, Y, tau = 1, groups = NULL, p1 = NULL, v1 = 1,
        varMarginals = varMarginals, 
        opt = opt,
        v_noise = 1 / tau, 
-       v_slab = v1[1])
+       v_slab = v1[1],
+       iters = iters)
 }
 
 ##

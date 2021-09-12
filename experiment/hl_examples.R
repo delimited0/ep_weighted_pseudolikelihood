@@ -1,8 +1,4 @@
-
-
-
 # My own example ----------------------------------------------------------
-
 set.seed(1)
 
 d = 10
@@ -28,7 +24,7 @@ plot(X[, 3], y)
 plot(X[, 4], y)
 
 tictoc::tic()
-result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, max_iter = 2000)
+result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, max_iter = 1000)
 tictoc::toc()
 result$m
 
@@ -46,13 +42,12 @@ p_incl_grid = seq(.01, .9, length.out = n_grid)
 # p_incl_grid = seq(.1, .12, length.out = n_grid)
 # p_incl_grid = c(.109, .110, .111, .112)
 #
-is_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                           opt = TRUE)
+is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                           opt = FALSE, eps = 1, k=.99)
 
 par(mfrow = c(1, 1))
-plot(p_incl_grid, is_result$mliks)
-plot(p_incl_grid[1:20], is_result$mliks[1:20])
-plot(p_incl_grid, is_result$weights)
+plot(p_incl_grid, is_grid_result$mliks)
+plot(p_incl_grid, is_grid_result$weights)
 
 # ep gss with prior grid and inportance sampling
 n_grid = 10
@@ -61,16 +56,15 @@ v_slab_grid = rep(v_slab, n_grid)
 p_incl_grid = seq(.01, .9, length.out = n_grid)
 
 tictoc::tic()
-gss_result = epwpl::ep_grid_gss(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                                opt=TRUE)
+gss_grid_result = epwpl::ep_grid_gss(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                opt=FALSE)
 tictoc::toc()
 
-plot(p_incl_grid, gss_result$mliks)
-plot(p_incl_grid[8:10], gss_result$mliks[8:10])
-plot(p_incl_grid, gss_result$weights)
+plot(p_incl_grid, gss_grid_result$mliks)
+plot(p_incl_grid, gss_grid_result$weights)
 
 # compare gss with ss:
-plot(is_result$pip, gss_result$pip)
+plot(is_grid_result$pip, gss_grid_result$pip)
 
 # the posteriors are the same
 plot(is_result$alpha[, 1], gss_result$alpha[, 1])
@@ -144,10 +138,12 @@ tictoc::toc()
 n_grid = 20
 v_noise_grid = rep(result$v_noise, n_grid)
 v_slab_grid = rep(result$v_slab, n_grid)
-p_incl_grid = seq(.01, .2, length.out = n_grid)
+p_incl_grid = seq(.1, .5, length.out = n_grid)
 
-result_grid = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                                opt=TRUE)
+result_grid = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                opt=FALSE, eps = .9, k= .99)
+
+plot(p_incl_grid, result_grid$mliks)
 
 # Example 5.1 -------------------------------------------------------------
 

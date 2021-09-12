@@ -7,11 +7,12 @@
 #' @param max_iter maximum number of iterations
 #' @param delta convergence parameter change threshold
 #' @param k damping multiplier
+#' @param eps initial damping value
 #' @param woodbury boolean, use woodbury form of update for V or not?
 #' @param opt boolean, optimize hyperparameters or not?
 #' @export
 ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200, 
-                  delta = 1e-4, k = .99, woodbury = FALSE, opt = TRUE) {
+                  delta = 1e-4, k = .99, eps = .5, woodbury = FALSE, opt = TRUE) {
   
   d = ncol(X)
   n = length(y)
@@ -50,39 +51,27 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   
   converged = FALSE
   iter = 1
-  eps = 1
   mlik_value = NA
   
   # EP iterations ----
   
   while (!converged & iter < max_iter) {
     
-    # damping factor
-    eps = eps * k  
-    
     # second factor
-    p_site2_undamp = .5*log(v_site1) - .5*log(v_site1 + v_slab) + 
+    p_site2_new = .5*log(v_site1) - .5*log(v_site1 + v_slab) + 
       .5 * m_site1^2 * ( (1 / v_site1) - (1 / (v_site1 + v_slab)) )
-    p_site2 = eps * p_site2_undamp + (1 - eps) * p_site2
     
-    a = plogis(p_site2 + p_site3) * (m_site1 / (v_site1 + v_slab)) +
-      plogis(-p_site2 - p_site3) * (m_site1 / v_site1)
-    b = plogis(p_site2 + p_site3) * ((m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab)^2) +
-      plogis(-p_site2 - p_site3) * ((m_site1 / v_site1)^2 - (1 / v_site1))
+    a = plogis(p_site2_new + p_site3) * (m_site1 / (v_site1 + v_slab)) +
+      plogis(-p_site2_new - p_site3) * (m_site1 / v_site1)
+    b = plogis(p_site2_new + p_site3) * ((m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab)^2) +
+      plogis(-p_site2_new - p_site3) * ((m_site1 / v_site1)^2 - (1 / v_site1))
     
-    v_site2_undamp = (1 / (a^2 - b)) - v_site1
-    
-    # deal with negative variance
-    is_neg <- v_site2_undamp < 0
-    v_site2_undamp[is_neg] = v_inf
-    
-    v_site2 = 1 / (eps * (1 / v_site2_undamp) + (1 - eps) * (1 / v_site2))
-    m_site2_undamp = m_site1 - a * (v_site2 + v_site1)
-    m_site2 = v_site2 * (eps * (m_site2_undamp / v_site2)  + (1 - eps) * (m_site2 / v_site2))
+    v_site2_new = (1 / (a^2 - b)) - v_site1
+    m_site2_new = m_site1 - a * (v_site2_new + v_site1)
     
     # first factor
-    V_site2 = diag(as.vector(v_site2))
-    V_site2_inv = diag(1 / as.vector(v_site2))
+    V_site2 = diag(as.vector(v_site2_new))
+    V_site2_inv = diag(1 / as.vector(v_site2_new))
     XV_tX = X %*% V_site2 %*% t(X)
     if (woodbury) 
       V = V_site2 - V_site2 %*% t(X) %*% 
@@ -94,16 +83,25 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     v_old = v
     v = diag(V)
     m_old = m
-    m = V %*% ( (1/v_noise) * tXy + V_site2_inv %*% m_site2)
-    p = p_site2 + p_site3
+    m = V %*% ( (1/v_noise) * tXy + V_site2_inv %*% m_site2_new)
+    p = p_site2_new + p_site3
     
-    v_site1_undamp = 1 / ( (1 / v) - (1 / v_site2) )
-    v_site1 = 1 / (eps * (1 / v_site1_undamp) + (1 - eps) * (1 / v_site1))
-    m_site1_undamp = ( (m / v) - (m_site2 / v_site2) ) * v_site1
-    m_site1 = v_site1 * (eps * (m_site1_undamp / v_site1) + (1 - eps) * (m_site1 / v_site1))
+    v_site1_new = 1 / ( (1 / v) - (1 / v_site2_new) )
+    m_site1_new = ( (m / v) - (m_site2_new / v_site2_new) ) * v_site1_new
+    
+    # deal with negative variance
+    is_neg <- v_site2_new < 0
+    v_site2_new[is_neg] = v_inf
     
     # damp the updates
+    eps = eps * k  
     
+    p_site2 = eps * p_site2_new + (1 - eps) * p_site2
+    v_site2 = 1 / (eps * (1 / v_site2_new) + (1 - eps) * (1 / v_site2))
+    m_site2 = v_site2 * (eps * (m_site2_new / v_site2_new)  + (1 - eps) * (m_site2 / v_site2))
+    
+    v_site1 = 1 / (eps * (1 / v_site1_new) + (1 - eps) * (1 / v_site1))
+    m_site1 = v_site1_new * (eps * (m_site1_new / v_site1_new) + (1 - eps) * (m_site1 / v_site1))
     
     # check convergence
     if (all(abs(v - v_old) < delta) & all(abs(m - m_old) < delta)) {

@@ -1,0 +1,175 @@
+---
+title: "EP SS prior Debugging"
+output: html_notebook
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+```
+
+# Effect of damping
+
+## Small example
+
+```{r small data}
+set.seed(1)
+
+v_noise = .1
+v_slab = 1
+p0 = .2
+
+d = 10
+n = 100
+X = matrix(rnorm(n * d), nrow = n, ncol=d)
+w = c(1, 1, rep(0, d-2))
+
+y = rnorm(n, X %*% w, sqrt(v_noise))
+
+par(mfrow = c(2, 2))
+plot(X[, 1], y)
+plot(X[, 2], y)
+plot(X[, 3], y)
+plot(X[, 4], y)
+```
+
+EP spike and slab linear regression with grid prior over inclusion probability,
+Bayesian model averaging.
+
+```{r initial damping}
+n_grid = 50
+v_noise_grid = rep(v_noise, n_grid)
+v_slab_grid = rep(v_slab, n_grid)
+p_incl_grid = seq(.01, .9, length.out = n_grid)
+
+eps_set = c(1, .99, .9, .8, .5, .25)
+k = .99
+
+par(mfrow = c(2, length(eps_set) / 2))
+
+for (eps in eps_set) {
+  is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                     opt = FALSE, eps = eps, k = k)
+  plot(p_incl_grid, is_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+```{r GSS initial damping}
+par(mfrow = c(2, length(eps_set) / 2))
+
+for (eps in eps_set) {
+  gss_grid_result = epwpl::ep_grid_gss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                       opt = FALSE, damping = eps, k = k)
+  plot(p_incl_grid, gss_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+With variance optimization:
+
+```{r initial damping with optimization}
+n_grid = 50
+v_noise_grid = rep(v_noise, n_grid)
+v_slab_grid = rep(v_slab, n_grid)
+p_incl_grid = seq(.01, .9, length.out = n_grid)
+
+eps_set = c(1, .99, .9, .8, .5, .25)
+k = .99
+
+par(mfrow = c(2, length(eps_set) / 2))
+
+for (eps in eps_set) {
+  is_grid_result = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                     opt = TRUE, eps = eps, k = k)
+  plot(p_incl_grid, is_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+```{r GSS initial damping with optimization}
+par(mfrow = c(2, length(eps_set) / 2))
+
+for (eps in eps_set) {
+  gss_grid_result = epwpl::ep_grid_gss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                       opt = TRUE, damping = eps, k = k)
+  plot(p_incl_grid, gss_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+Constant damping:
+
+```{r constant damping}
+n_grid = 50
+v_noise_grid = rep(v_noise, n_grid)
+v_slab_grid = rep(v_slab, n_grid)
+p_incl_grid = seq(.01, .9, length.out = n_grid)
+
+eps_set = c(1, .99, .9)
+k = 1
+
+par(mfrow = c(2, ceiling(length(eps_set) / 2)))
+
+for (eps in eps_set) {
+  is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                     opt = TRUE, eps = eps, k = k)
+  plot(p_incl_grid, is_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+## Bigger example
+
+```{r}
+d = 100
+n = 100
+X = cbind(mvtnorm::rmvnorm(n, rep(0, d), 5.*diag(d) + .5*rep(1, d) %*% t(rep(1, d))))
+w = c(rep(1, 10), rep(0, d-10))
+
+p0 = .1
+v_slab = .1
+v_noise = 1/10
+
+y = rnorm(n, X %*% w, sqrt(v_noise))
+```
+
+```{r}
+n_grid = 50
+v_noise_grid = rep(v_noise, n_grid)
+v_slab_grid = rep(v_slab, n_grid)
+p_incl_grid = seq(.1, .4, length.out = n_grid)
+
+eps_set = c(1, .99, .9)
+k = .99
+
+par(mfrow = c(2, ceiling(length(eps_set) / 2)))
+
+for (eps in eps_set) {
+  is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                     opt = FALSE, eps = eps, k = k)
+  plot(p_incl_grid, is_grid_result$mliks, 
+       main = paste0("Initial damping=", eps, ", factor=", k))
+}
+```
+
+
+```{r}
+
+par(mfrow = c(2, length(eps_set) / 2))
+
+post_incl = data.table(is_grid_result$alpha)
+setnames(post_incl, format(p_incl_grid, digits = 1))
+post_incl[, dim := 1:nrow(.SD)]
+post_incl = melt(post_incl, id.vars = "dim", variable.name = "p0")
+
+ggplot(post_incl, aes(x = dim, y = value))
+
+for (eps in eps_set) {
+  plot()
+}
+
+```
+
+
+
