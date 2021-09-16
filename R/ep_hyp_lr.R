@@ -127,6 +127,35 @@ ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE,
   )
 }
 
+vsvb_grid_ss = function(X, y, sigma, sa, logodds, verbose=FALSE) {
+  
+  p = ncol(X)
+  n = nrow(X)
+  ns = length(sigma)
+  
+  mliks = rep(NA, ns)
+  logodds_incls = matrix(NA, p, ns)
+  mu_mat = matrix(NA, p, ns)
+  v_mat = matrix(NA, p, ns)
+  
+  sigma_vec = rep(NA, ns)
+  sa_vec = rep(NA, ns)
+  
+  for (i in 1:ns) {
+    
+    if (verbose) {
+      print(paste0("Hyperparameter setting ", i))
+    }
+    
+    v_noise = sigma[i]
+    v_slab = sa[i]
+    p_incl = plogis(logodds[i])
+    
+    
+    
+  }
+}
+
 normalizelogweights = function(logw) {
   
   # Guard against underflow or overflow by adjusting the

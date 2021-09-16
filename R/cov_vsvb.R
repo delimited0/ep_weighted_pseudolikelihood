@@ -14,7 +14,7 @@
 ##true_pi: estimate of spike and slab mixture proportion.
 
 #' @export
-cov_vsvb = function(y, X, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D, D_long, 
+cov_vsvb = function(y, X_mat, mu, mu_mat, alpha, DXtX_Big_ind, D_long, 
                     sigmasq, sigmabeta_sq, 
                     y_long_vec, X_vec, true_pi) {
   

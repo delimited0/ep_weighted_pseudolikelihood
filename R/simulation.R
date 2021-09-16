@@ -124,13 +124,13 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
       }
     }
     
-    Big_diag_mat <- matrix(rep(0,n^2*p),nrow=n,ncol=n*p)
-    for(i in 1:n){
-      k=p*(i-1)
-      for(j in 1:p){
-        Big_diag_mat[i,k+j]=1
-      }
-    }
+    # Big_diag_mat <- matrix(rep(0,n^2*p),nrow=n,ncol=n*p)
+    # for(i in 1:n){
+    #   k=p*(i-1)
+    #   for(j in 1:p){
+    #     Big_diag_mat[i,k+j]=1
+    #   }
+    # }
     
     sigmasq = sigma0^2
     
@@ -153,10 +153,6 @@ wpl_vsvb_regression = function(data_mat, weight_mat, sigma0, p0, v_slab,
     for( i in 1:n){
       D_long[, i] = matrix(t(weight_mat[, i] %*% matrix(1, 1, p)), n*p, 1)
     }
-    
-    S_sq = matrix(sigmasq*(DXtX + 1/sigmabeta_sq)^(-1), n, p) #Initialization
-    
-    iter = 1
     
     ind_vec = seq(0,(n-1)*p,by=p)
     Ind_mat = matrix(0,n,p)

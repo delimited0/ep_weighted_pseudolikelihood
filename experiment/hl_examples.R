@@ -88,6 +88,9 @@ plot(is_result$sa, varbvs_result$sa)
 
 plot(is_result$alpha)
 
+# my VB
+vb_result = epwpl::vb_ss(X, y, v_noise, v_slab, p0)
+
 # ep, also optimize p0
 result_p0 = epwpl::ep_wlr_nmp(X, y, sigma0, p0, v_slab)
 
