@@ -251,13 +251,16 @@ processPriorTerms <- function(X, Y, v1, posteriorApproximation, damping) {
   
   Inv <- solve(diag(lambda^-1) + t(X) %*% (matrix(posteriorApproximation$nujTilde, d, n) * X), tol = 1e-100)
   
+  # special computation for just the marginals of approximating mean and variance
   meanMarinals <- posteriorApproximation$nujTilde * vectMul - Delta_X %*% Inv %*% (t.default(Delta_X) %*% vectMul)
   varMarginals <- posteriorApproximation$nujTilde - colSums(((Inv) %*% t.default(Delta_X)) * t.default(Delta_X))
   
   # We remove the approximate term from the posterior approximation
+  # that is we compute parameters of the cavity distribution
+  # for some reason called ___MarginalsOld
   
   varMarginalsOld <- (varMarginals^-1 - posteriorApproximation$nujTilde^-1)^-1
-  varMarginalsOld[ ! is.finite(varMarginalsOld) ] <- 1e6
+  varMarginalsOld[ ! is.finite(varMarginalsOld) ]  <- 1e6
   
   meanMarinalsOld <- varMarginalsOld * (varMarginals^-1 * meanMarinals - posteriorApproximation$nujTilde ^-1 * posteriorApproximation$mujTilde)
   
@@ -278,16 +281,21 @@ processPriorTerms <- function(X, Y, v1, posteriorApproximation, damping) {
   logG1 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v1K), log = TRUE) 
   logG0 <- dnorm(0, mean = meanMarinalsOld, sd = sqrt(varMarginalsOld + v0K), log = TRUE)
   
+  # not used ...
   Zj <- plogis(pOld) * exp(logG1) + plogis(- pOld) * exp(logG0)
   
+  # a in the paper
   c1 <- plogis(pOld + logG1 - logG0) * - meanMarinalsOld / (varMarginalsOld + v1K) + plogis(- pOld - logG1 + logG0) * 
     - meanMarinalsOld / (varMarginalsOld + v0K)
   
+  # b in the paper
   c2 <- (plogis(pOld + logG1 - logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v1K)^2 - 1 / (varMarginalsOld + v1K)) + 
            plogis(- pOld - logG1 + logG0) * (meanMarinalsOld^2 / (varMarginalsOld + v0K)^2 - 1 / (varMarginalsOld + v0K)))
   
+  # a^2 - b
   c3 <- c1^2 - c2
   
+  # these are not used ????
   varMarginalsNew <- varMarginalsOld - c3 * varMarginalsOld^2
   meanMarinalsNew <- meanMarinalsOld + c1 * varMarginalsOld
   
@@ -480,14 +488,15 @@ evaluateEvidence <- function(X, Y, p0, posteriorApproximation, tau, v1) {
   
   D_j <- prodActive + prodInactive
   
+  # what I thought was the symbol for nu
   upsilon <- tau * X %*% Y + posteriorApproximation$mujTilde * posteriorApproximation$nujTilde^-1
   
   Xv <- matrix(upsilon, nrow = 1)
+
+  Xs <- t(X) * matrix(posteriorApproximation$nujTilde, n, d, byrow = TRUE)  # X \Lambda
+  M <- solve(diag(n) * tau^-1 + Xs %*% X)  # inv(I * sigma^2 + X \Lambda X^T)
   
-  Xs <- t(X) * matrix(posteriorApproximation$nujTilde, n, d, byrow = TRUE)
-  M <- solve(diag(n) * tau^-1 + Xs %*% X)
-  
-  Tv <- Xs %*% t.default(Xv)
+  Tv <- Xs %*% t.default(Xv)  # X \Lambda upsilon
   Cv <- t.default(Xv) * matrix(posteriorApproximation$nujTilde, d, nrow(Xv)) - t(Xs) %*% (M %*% Tv)
   values <- colSums(Cv * t.default(Xv))
   

@@ -13,7 +13,7 @@ ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
   
   p = ncol(X)
   n = nrow(X)
-  ns = length(sigma)
+  ns = length(logodds)
   
   mliks = rep(NA, ns)
   post_incls = matrix(NA, p, ns)
@@ -28,14 +28,22 @@ ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
     v_slab = sa[i]
     p_incl = plogis(logodds[i])
     
-    fit = ep_wlr(X, y, v_noise, v_slab, p_incl, 
-                 v_inf = v_inf, 
+    fit = ep_wlr(X, y, v_noise, v_slab, p_incl,
+                 v_inf = v_inf,
                  max_iter = max_iter,
                  delta = delta,
                  eps = eps,
-                 k = k,  
+                 k = k,
                  woodbury = woodbury,
                  opt = opt)
+    # fit = ep_ss(X, y, v_noise, v_slab, p_incl,
+    #             v_inf = v_inf,
+    #             max_iter = max_iter,
+    #             delta = delta,
+    #             damping = eps,
+    #             k = k,
+    #             woodbury = woodbury,
+    #             opt = opt)
     
     mliks[i] = fit$llik
     post_incls[, i] = fit$p
@@ -74,7 +82,7 @@ ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE,
   
   p = ncol(X)
   n = nrow(X)
-  ns = length(sigma)
+  ns = length(logodds)
   
   mliks = rep(NA, ns)
   logodds_incls = matrix(NA, p, ns)
@@ -127,16 +135,18 @@ ep_grid_gss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt = TRUE,
   )
 }
 
-vsvb_grid_ss = function(X, y, sigma, sa, logodds, verbose=FALSE) {
+#' @export
+vb_grid_ss = function(X, y, sigma, sa, logodds, verbose=FALSE, opt=TRUE) {
   
   p = ncol(X)
   n = nrow(X)
-  ns = length(sigma)
+  ns = length(logodds)
   
-  mliks = rep(NA, ns)
+  elbos = rep(NA, ns)
   logodds_incls = matrix(NA, p, ns)
   mu_mat = matrix(NA, p, ns)
   v_mat = matrix(NA, p, ns)
+  n_iters = rep(NA, ns)
   
   sigma_vec = rep(NA, ns)
   sa_vec = rep(NA, ns)
@@ -151,9 +161,37 @@ vsvb_grid_ss = function(X, y, sigma, sa, logodds, verbose=FALSE) {
     v_slab = sa[i]
     p_incl = plogis(logodds[i])
     
+    fit = vb_ss(X, y, v_noise, v_slab, p_incl, opt=opt)
     
+    elbos[i] = fit$elbo
+    n_iters[i] = fit$iters
+    logodds_incls[, i] = qlogis(fit$alpha)
+    mu_mat[, i] = fit$mu
+    v_mat[, i] = fit$v
     
+    sigma_vec[i] = fit$v_noise
+    sa_vec[i] = fit$v_slab
   }
+  
+  post_incls = plogis(logodds_incls)
+  
+  weights = normalizelogweights(elbos)
+  pip = post_incls %*% weights
+  beta = mu_mat %*% weights
+  
+  result = list(
+    sigma = sigma_vec,
+    sa = sa_vec,
+    w = weights,
+    alpha = post_incls,
+    mu = mu_mat,
+    v = v_mat,
+    pip = pip,
+    beta = beta,
+    weights = weights,
+    mliks = elbos,
+    iters = n_iters
+  )
 }
 
 normalizelogweights = function(logw) {

@@ -53,6 +53,44 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   iter = 1
   mlik_value = NA
   
+  mlik = function(params) {
+    v_noise = params[1]
+    v_slab = params[2]
+    
+    logs1 = .5*(
+      tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
+        tms2Vms2 -
+        determinant(In + (XV_tX / v_noise))$modulus + 
+        sum(log1p(v_site2 / v_site1)) + 
+        sum_pmv3
+    )
+    
+    logc = log_sum_exp(
+      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+      plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
+    )
+    
+    logs2 = .5*sum(
+      2*logc + 
+        log1p(v_site1 / v_site2) +
+        sum_pmv3 + 
+        2*log_sum_exp(
+          plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
+          plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)
+        ) -
+        2*(plogis(p_site3, log.p=TRUE) + plogis(-p_site3, log.p=TRUE))
+    )
+    
+    value = logs1 + logs2 + .5*d*log(2*pi) +
+      .5*sum(log(v)) - .5*sum_pmv3 +
+      sum(log_sum_exp(
+        plogis(p_site2, log.p = TRUE) + plogis(p_site3, log.p = TRUE),
+        plogis(-p_site2, log.p = TRUE) + plogis(-p_site3, log.p = TRUE)
+      ))
+    
+    return(-value)
+  }
+  
   # EP iterations ----
   
   while (!converged & iter < max_iter) {
@@ -84,27 +122,34 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     v = diag(V)
     m_old = m
     m = V %*% ( (1/v_noise) * tXy + V_site2_inv %*% m_site2_new)
+    p_old = p
     p = p_site2_new + p_site3
     
     v_site1_new = 1 / ( (1 / v) - (1 / v_site2_new) )
     m_site1_new = ( (m / v) - (m_site2_new / v_site2_new) ) * v_site1_new
     
     # deal with negative variance
-    is_neg <- v_site2_new < 0
+    is_neg = v_site2_new < 0
     v_site2_new[is_neg] = v_inf
     
     # damp the updates
     eps = eps * k  
     
-    p_site2 = eps * p_site2_new + (1 - eps) * p_site2
-    v_site2 = 1 / (eps * (1 / v_site2_new) + (1 - eps) * (1 / v_site2))
-    m_site2 = v_site2 * (eps * (m_site2_new / v_site2_new)  + (1 - eps) * (m_site2 / v_site2))
+    p_site2_damp = eps * p_site2_new + (1-eps) * p_site2
+    v_site2_damp = 1 / (eps * (1 / v_site2_new) + (1-eps) * (1 / v_site2))
+    m_site2_damp = v_site2_damp * (eps * (m_site2_new / v_site2_new)  + (1-eps) * (m_site2 / v_site2))
+    p_site2 = p_site2_damp
+    v_site2 = v_site2_damp
+    m_site2 = m_site2_damp
     
-    v_site1 = 1 / (eps * (1 / v_site1_new) + (1 - eps) * (1 / v_site1))
-    m_site1 = v_site1_new * (eps * (m_site1_new / v_site1_new) + (1 - eps) * (m_site1 / v_site1))
+    v_site1_damp = 1 / (eps * (1 / v_site1_new) + (1 - eps) * (1 / v_site1))
+    m_site1_damp = v_site1_damp * (eps * (m_site1_new / v_site1_new) + (1 - eps) * (m_site1 / v_site1))
+    v_site1 = v_site1_damp
+    m_site1 = m_site1_damp
     
     # check convergence
-    if (all(abs(v - v_old) < delta) & all(abs(m - m_old) < delta)) {
+    # if (all(abs(v - v_old) < delta) & all(abs(m - m_old) < delta)) {
+    if (max(abs(p - p_old)) < delta) {
       converged = TRUE
     }
     
@@ -118,44 +163,6 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     #   dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
     sum_pmv3 = sum( (m_site1^2 / v_site1) + (m_site2^2 / v_site2) - (m^2 / v) )
     
-    mlik = function(params) {
-      v_noise = params[1]
-      v_slab = params[2]
-      
-      logs1 = .5*(
-        tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
-          tms2Vms2 -
-          determinant(In + (XV_tX / v_noise))$modulus + 
-          sum(log1p(v_site2 / v_site1)) + 
-          sum_pmv3
-      )
-      
-      logc = log_sum_exp(
-        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
-        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
-      )
-      
-      logs2 = .5*sum(
-        2*logc + 
-        log1p(v_site1 / v_site2) +
-        sum_pmv3 + 
-        2*log_sum_exp(
-          plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
-          plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)
-        ) -
-        2*(plogis(p_site3, log.p=TRUE) + plogis(-p_site3, log.p=TRUE))
-      )
-      
-      value = logs1 + logs2 + .5*d*log(2*pi) +
-        .5*sum(log(v)) - .5*sum_pmv3 +
-        sum(log_sum_exp(
-          plogis(p_site2, log.p = TRUE) + plogis(p_site3, log.p = TRUE),
-          plogis(-p_site2, log.p = TRUE) + plogis(-p_site3, log.p = TRUE)
-        ))
-      
-      return(-value)
-    }
-    
     # optimize hyperparameters
     if (opt) {
       hyper_opt = dfoptim::nmkb(par = c(v_noise, v_slab), 
@@ -166,10 +173,11 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
       v_slab = hyper_opt$par[2]
       # mlik_value = -hyper_opt$value
     }
-    mlik_value = -mlik(c(v_noise, v_slab))
     
     iter = iter + 1
   }
+  
+  mlik_value = -mlik(c(v_noise, v_slab))
   
   result <- list(
     m = m,

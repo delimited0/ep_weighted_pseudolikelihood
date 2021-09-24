@@ -33,6 +33,68 @@ plot(X[, 3], y)
 plot(X[, 4], y)
 ```
 
+## Just a linear model, damping effect
+
+For GSS, converges to same solution regardless of damping:
+
+```{r}
+par(mfrow = c(1, 2))
+
+iters = rep(NA, length(eps_set))
+mliks =  rep(NA, length(eps_set))
+
+for (i in 1:length(eps_set)) {
+  eps = eps_set[i]
+  gss_result = epwpl::GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p0, ncol(X)),
+                                        v1 = v_slab, verbose=FALSE, opt=FALSE,
+                                        damping = eps)
+  iters[i] = gss_result$iters
+  mliks[i] = gss_result$evidence
+}
+
+plot(eps_set, iters)
+plot(eps_set, mliks)
+```
+
+But my implementation is sensitive to damping:
+
+```{r}
+par(mfrow = c(1, 2))
+
+iters = rep(NA, length(eps_set))
+mliks =  rep(NA, length(eps_set))
+
+for (i in 1:length(eps_set)) {
+  eps = eps_set[i]
+  result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, eps = eps, k=1, opt=FALSE)
+  iters[i] = result$iters
+  mliks[i] = result$llik
+}
+
+plot(eps_set, iters)
+plot(eps_set, mliks)
+```
+My second implementation with factor 2 changes only is insensitive to damping:
+
+```{r}
+par(mfrow = c(1, 2))
+
+iters = rep(NA, length(eps_set))
+mliks =  rep(NA, length(eps_set))
+
+for (i in 1:length(eps_set)) {
+  eps = eps_set[i]
+  result = epwpl::ep_ss(X, y, v_noise, v_slab, p0, damping = eps, k=1, opt=FALSE)
+  iters[i] = result$iters
+  mliks[i] = result$llik
+}
+
+plot(eps_set, iters)
+plot(eps_set, mliks)
+```
+
+## Hyperparam averaging
+
 EP spike and slab linear regression with grid prior over inclusion probability,
 Bayesian model averaging.
 
@@ -43,28 +105,48 @@ v_slab_grid = rep(v_slab, n_grid)
 p_incl_grid = seq(.01, .9, length.out = n_grid)
 
 eps_set = c(1, .99, .9, .8, .5, .25)
-k = .99
+k = 1
 
 par(mfrow = c(2, length(eps_set) / 2))
 
 for (eps in eps_set) {
-  is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+  is_grid_result = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
                                      opt = FALSE, eps = eps, k = k)
   plot(p_incl_grid, is_grid_result$mliks, 
        main = paste0("Initial damping=", eps, ", factor=", k))
 }
+
+
 ```
+
+We see that the solution is sensitive to initial damping. Meanwhile GSS:
 
 ```{r GSS initial damping}
 par(mfrow = c(2, length(eps_set) / 2))
 
-for (eps in eps_set) {
+gss_result_dt = rbindlist(lapply(eps_set, function(eps) {
   gss_grid_result = epwpl::ep_grid_gss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
                                        opt = FALSE, damping = eps, k = k)
+  
   plot(p_incl_grid, gss_grid_result$mliks, 
        main = paste0("Initial damping=", eps, ", factor=", k))
-}
+  
+  # summarize results for eps setting in dt
+  post_incl = data.table(gss_grid_result$alpha)
+  setnames(post_incl, format(p_incl_grid, digits = 1))
+  post_incl[, dim := 1:nrow(.SD)]
+  post_incl = melt(post_incl, id.vars = "dim", variable.name = "p0")
+  post_incl[, eps := eps]
+  return(post_incl)
+}))
+
+ggplot(gss_result_dt, aes(x = dim, y = value, color = as.numeric(p0))) +
+  facet_wrap(vars(eps)) +
+  geom_point()
 ```
+
+converges to same solution regardless of initial damping.
+
 
 With variance optimization:
 
@@ -163,7 +245,9 @@ setnames(post_incl, format(p_incl_grid, digits = 1))
 post_incl[, dim := 1:nrow(.SD)]
 post_incl = melt(post_incl, id.vars = "dim", variable.name = "p0")
 
-ggplot(post_incl, aes(x = dim, y = value))
+ggplot(post_incl, aes(x = dim, y = value)) +
+  geom_point() +
+  facet_wrap(vars(p0))
 
 for (eps in eps_set) {
   plot()

@@ -28,10 +28,14 @@ result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, max_iter = 1000)
 tictoc::toc()
 result$m
 
+result_ss = epwpl::ep_ss(X, y, v_noise, v_slab, p0, 
+                         damping=.9, k=.99)
+
 # group spike slab
 tictoc::tic()
 gss_result = epwpl::GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p0, ncol(X)),
-                                      v1 = v_slab, verbose=FALSE, opt=TRUE)
+                                      v1 = v_slab, verbose=FALSE, opt=TRUE,
+                                      damping = .5)
 tictoc::toc()
 
 # ep with grid prior and importance sampling
@@ -42,8 +46,8 @@ p_incl_grid = seq(.01, .9, length.out = n_grid)
 # p_incl_grid = seq(.1, .12, length.out = n_grid)
 # p_incl_grid = c(.109, .110, .111, .112)
 #
-is_grid_result = epwpl::ep_grid_lr(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                           opt = FALSE, eps = 1, k=.99)
+is_grid_result = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                           opt = FALSE, eps = .9, k=1)
 
 par(mfrow = c(1, 1))
 plot(p_incl_grid, is_grid_result$mliks)
@@ -89,7 +93,14 @@ plot(is_result$sa, varbvs_result$sa)
 plot(is_result$alpha)
 
 # my VB
-vb_result = epwpl::vb_ss(X, y, v_noise, v_slab, p0)
+vb_result = epwpl::vb_ss(X, y, v_noise, v_slab, p0, opt=TRUE)
+vb_grid_result = vb_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid))
+
+plot(p_incl_grid, vb_grid_result$mliks)
+
+# varbvs
+varbvs_result = varbvs::varbvs(X=X, Z=NULL, y=y, family="gaussian", 
+                               sigma = v_noise, sa = v_slab, logodds = qlogis(p0))
 
 # ep, also optimize p0
 result_p0 = epwpl::ep_wlr_nmp(X, y, sigma0, p0, v_slab)
@@ -146,7 +157,19 @@ p_incl_grid = seq(.1, .5, length.out = n_grid)
 result_grid = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
                                 opt=FALSE, eps = .9, k= .99)
 
+vb_result_grid = epwpl::vb_grid_ss(X, y, 
+                                   v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                   opt=FALSE)
+
+varbvs_result_grid = varbvs::varbvs(X=X, Z=NULL, y=y, family="gaussian",
+                                    sigma=v_noise_grid, sa=v_slab_grid,
+                                    logodds = qlogis(p_incl_grid))
+
 plot(p_incl_grid, result_grid$mliks)
+
+plot(p_incl_grid, vb_result_grid$mliks)
+
+plot(p_incl_grid, varbvs_result_grid$logw)
 
 # Example 5.1 -------------------------------------------------------------
 

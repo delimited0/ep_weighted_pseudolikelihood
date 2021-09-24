@@ -53,6 +53,12 @@ data_mat = rbind(X1, X2)
 
 
 # averaging over cartesian product of hyper param settings
+p_incl_grid = seq(.05, .25, .05)
+n_pip = length(p_incl_grid)
+v_noise_grid = c(0.01, 0.05, 0.1, 0.5, 1)
+v_slab_grid = c(0.01, 0.05, 0.1, 0.5, 1)
+
+
 theta = expand.grid(list(
   p0 = p_incl_grid, 
   v_noise = v_noise_grid,
@@ -67,6 +73,20 @@ result_fix = epwpl::wpl_ep_gss(data_mat, weight_mat_fit,
 tictoc::toc()
 
 tictoc::tic()
+result_vb_fix = epwpl::wpl_vb(data_mat, weight_mat_fit,
+                              theta$v_noise, 
+                              theta$v_slab, 
+                              theta$p0, opt=FALSE, verbose=TRUE)
+tictoc::tic()
+
+tictoc::tic()
+result_varbvs_fix = epwpl::wpl_varbvs(data_mat, weight_mat_fit,
+                              theta$v_noise, 
+                              theta$v_slab, 
+                              theta$p0, opt=FALSE, verbose=TRUE)
+tictoc::tic()
+
+
 result_fix = epwpl::wpl_ep(data_mat, weight_mat_fit, 
                            theta$v_noise, 
                            theta$v_slab, 
@@ -92,6 +112,22 @@ result_opt = epwpl::wpl_ep(data_mat, weight_mat_fit,
                            damping = 1, k = .99,
                            opt=TRUE, verbose=TRUE)
 tictoc::toc()
+
+tictoc::tic()
+result_vb_opt = epwpl::wpl_vb(data_mat, weight_mat_fit,
+                              rep(v_noise, n_pip), 
+                              rep(v_slab, n_pip), 
+                              p_incl_grid)
+tictoc::toc()
+
+tictoc::tic()
+result_varbvs_opt = epwpl::wpl_varbvs(data_mat, weight_mat_fit,
+                                      rep(v_noise, n_pip), 
+                                      rep(v_slab, n_pip), 
+                                      p_incl_grid, opt=TRUE, verbose=FALSE)
+tictoc::tic()
+
+
 
 # fix inclusion probability, optimize over variances (the old setting)
 result_opt2 = epwpl::wpl_ep(data_mat, weight_mat_fit,
