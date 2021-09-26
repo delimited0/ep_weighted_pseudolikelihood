@@ -243,8 +243,8 @@ processPriorTerms <- function(X, Y, v1, posteriorApproximation, damping) {
   # We extract the mean and the variance of the marginals
   # We compute first the lambda matrix and the upsilon vector
   
-  lambda <- posteriorApproximation$viTilde^-1
-  upsilon <- posteriorApproximation$miTilde * posteriorApproximation$viTilde^-1
+  lambda <- posteriorApproximation$viTilde^-1  # 1 / v_noise
+  upsilon <- posteriorApproximation$miTilde * posteriorApproximation$viTilde^-1  # m_site2 / v_noise
   
   Delta_X <- matrix(posteriorApproximation$nujTilde, d, n) * X
   vectMul <- (X %*% upsilon + posteriorApproximation$nujTilde^-1 * posteriorApproximation$mujTilde)

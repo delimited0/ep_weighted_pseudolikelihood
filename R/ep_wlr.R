@@ -95,6 +95,9 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   
   while (!converged & iter < max_iter) {
     
+    if (any(is.na(v_site1)))
+      browser()
+    
     # second factor
     p_site2_new = .5*log(v_site1) - .5*log(v_site1 + v_slab) + 
       .5 * m_site1^2 * ( (1 / v_site1) - (1 / (v_site1 + v_slab)) )
@@ -148,7 +151,6 @@ ep_wlr = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     m_site1 = m_site1_damp
     
     # check convergence
-    # if (all(abs(v - v_old) < delta) & all(abs(m - m_old) < delta)) {
     if (max(abs(p - p_old)) < delta) {
       converged = TRUE
     }

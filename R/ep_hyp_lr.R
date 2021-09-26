@@ -1,4 +1,5 @@
-#'
+#' expectation propagation for Bayesian variable selection
+#' 
 #' @param X 
 #' @param y
 #' @param sigma
@@ -8,8 +9,9 @@
 #'
 #' uniform discrete grid hyperprior
 #' assume prior logodds all the same for now
-ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
-                      delta = 1e-4, k = .99, eps = .5, woodbury = FALSE, opt = TRUE) {
+epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
+                      delta = 1e-4, k = .99, damping = .5, woodbury = FALSE, opt = TRUE,
+                      method = "ep2", verbose = FALSE) {
   
   p = ncol(X)
   n = nrow(X)
@@ -22,36 +24,58 @@ ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
   
   sigma_vec = rep(NA, ns)
   sa_vec = rep(NA, ns)
+  iters = rep(NA, ns)
   
   for (i in 1:ns) {
     v_noise = sigma[i]
     v_slab = sa[i]
     p_incl = plogis(logodds[i])
     
-    fit = ep_wlr(X, y, v_noise, v_slab, p_incl,
-                 v_inf = v_inf,
-                 max_iter = max_iter,
-                 delta = delta,
-                 eps = eps,
-                 k = k,
-                 woodbury = woodbury,
-                 opt = opt)
-    # fit = ep_ss(X, y, v_noise, v_slab, p_incl,
-    #             v_inf = v_inf,
-    #             max_iter = max_iter,
-    #             delta = delta,
-    #             damping = eps,
-    #             k = k,
-    #             woodbury = woodbury,
-    #             opt = opt)
+    if (method == "ss_ep2") {
+      fit = ep_ss2(X, y, v_noise, v_slab, p_incl,
+                   v_inf = v_inf,
+                   max_iter = max_iter,
+                   delta = delta,
+                   damping = damping,
+                   k = k,
+                   woodbury = woodbury,
+                   opt = opt)
+    }
+    else if (method == "ss_ep1") {
+      fit = ep_ss1(X, y, v_noise, v_slab, p_incl,
+                   v_inf = v_inf,
+                   max_iter = max_iter,
+                   delta = delta,
+                   damping = damping,
+                   k = k,
+                   woodbury = woodbury,
+                   opt = opt)
+    }
+    else if (method == "gss") {
+      fit = GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p_incl, ncol(X)),
+                              v1 = v_slab, verbose = FALSE, opt = opt,
+                              damping = damping, k = k)
+    }
+    else {
+      stop("Invalid inference method")
+    }
     
-    mliks[i] = fit$llik
-    post_incls[, i] = fit$p
-    mu_mat[, i] = fit$m
-    v_mat[, i] = fit$v
+    if (method %in% c("ss_ep2", "ss_ep1")) {
+      mliks[i] = fit$llik
+      post_incls[, i] = fit$p
+      mu_mat[, i] = fit$m
+      v_mat[, i] = fit$v  
+    }
+    else if (method == "gss") {
+      mliks[i] = fit$evidence
+      post_incls[, i] = plogis(fit$posteriorApproximation$p)
+      mu_mat[, i] = fit$meanMarginals
+      v_mat[, i] = fit$varMarginals
+    }
     
     sigma_vec[i] = fit$v_noise
     sa_vec[i] = fit$v_slab
+    iters[i] = fit$iters
   }
   
   weights = normalizelogweights(mliks)
@@ -68,7 +92,8 @@ ep_grid_ss = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
     pip = pip,
     beta = beta,
     weights = weights,
-    mliks = mliks
+    mliks = mliks,
+    iters = iters
   )
   
   return(result)

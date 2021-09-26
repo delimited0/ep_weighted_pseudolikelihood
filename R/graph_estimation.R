@@ -33,10 +33,11 @@ wpl_ep = function(data_mat, weight_mat,
       y_weighted = y * sqrt_weight[i, ]
       X_weighted = X * sqrt_weight[i, ]
       
-      fit = epwpl::ep_grid_ss(X_weighted, y_weighted, 
-                               v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                               eps = damping, k = k,
-                               opt = opt)
+      fit = epwpl::epvbs(X_weighted, y_weighted, 
+                          v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                          damping = damping, k = k,
+                          opt = opt,
+                          method = "ss_ep2")
       
       graphs[[i]][resp_idx, -resp_idx] = t(fit$pip)
       results[[i]][[resp_idx]] = fit

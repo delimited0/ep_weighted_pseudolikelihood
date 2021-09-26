@@ -1,4 +1,4 @@
-# My own example ----------------------------------------------------------
+# Small example ----------------------------------------------------------
 set.seed(1)
 
 d = 10
@@ -24,51 +24,69 @@ plot(X[, 3], y)
 plot(X[, 4], y)
 
 tictoc::tic()
-result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, max_iter = 1000)
+result_epss2 = epwpl::ep_ss2(X, y, v_noise, v_slab, p0, 
+                             damping=.9, k=.99)
 tictoc::toc()
-result$m
 
-result_ss = epwpl::ep_ss(X, y, v_noise, v_slab, p0, 
-                         damping=.9, k=.99)
+tictoc::tic()
+result_epss1 = epwpl::ep_ss2(X, y, v_noise, v_slab, p0, 
+                             damping=.9, k=.99)
+tictoc::toc()
 
 # group spike slab
 tictoc::tic()
 gss_result = epwpl::GroupSpikeAndSlab(X, y, tau=1/v_noise, p1 = rep(p0, ncol(X)),
-                                      v1 = v_slab, verbose=FALSE, opt=TRUE,
-                                      damping = .5)
+                                      v1 = v_slab, verbose=FALSE, opt=FALSE,
+                                      damping = .9, k=.99)
 tictoc::toc()
 
-# ep with grid prior and importance sampling
+## ep with grid prior and importance sampling ----
 n_grid = 50
-v_noise_grid = rep(v_noise, n_grid)
-v_slab_grid = rep(v_slab, n_grid)
-p_incl_grid = seq(.01, .9, length.out = n_grid)
-# p_incl_grid = seq(.1, .12, length.out = n_grid)
-# p_incl_grid = c(.109, .110, .111, .112)
-#
-is_grid_result = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                           opt = FALSE, eps = .9, k=1)
-
-par(mfrow = c(1, 1))
-plot(p_incl_grid, is_grid_result$mliks)
-plot(p_incl_grid, is_grid_result$weights)
-
-# ep gss with prior grid and inportance sampling
-n_grid = 10
 v_noise_grid = rep(v_noise, n_grid)
 v_slab_grid = rep(v_slab, n_grid)
 p_incl_grid = seq(.01, .9, length.out = n_grid)
 
 tictoc::tic()
-gss_grid_result = epwpl::ep_grid_gss(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                                opt=FALSE)
+bvs_ep2_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                              opt = FALSE, damping = .9, k=1, 
+                              method = "ss_ep2")
 tictoc::toc()
 
-plot(p_incl_grid, gss_grid_result$mliks)
-plot(p_incl_grid, gss_grid_result$weights)
+tictoc::tic()
+bvs_ep1_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                              opt = FALSE, damping = .9, k=1, 
+                              method = "ss_ep1")
+tictoc::toc()
+
+tictoc::tic()
+bvs_gss_result = epwpl::epvbs(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                                     opt=FALSE, damping=.9, k=1,
+                                    method="gss")
+tictoc::toc()
+
+par(mfrow = c(1, 3))
+plot(p_incl_grid, bvs_ep2_result$mliks, main="EP 2")
+plot(p_incl_grid, bvs_ep1_result$mliks, main="EP 1")
+plot(p_incl_grid, bvs_gss_result$mliks, main="GSS")
+
+par(mfrow = c(1, 3))
+plot(p_incl_grid, bvs_ep2_result$weights)
+plot(p_incl_grid, bvs_ep1_result$weights)
+plot(p_incl_grid, bvs_gss_result$weights)
+
+par(mfrow = c(1, 3))
+plot(p_incl_grid, bvs_ep2_result$iters, main="EP 2")
+plot(p_incl_grid, bvs_ep1_result$iters, main="EP 1")
+plot(p_incl_grid, bvs_gss_result$iters, main="GSS")
 
 # compare gss with ss:
-plot(is_grid_result$pip, gss_grid_result$pip)
+pairs(data.frame(
+  "EP 2" = log(bvs_ep2_result$pip),
+  "EP 1" = log(bvs_ep1_result$pip),
+  "GSS"  = log(bvs_gss_result$pip)
+))
+
+plot(bvs_ep2_result$pip, gss_grid_result$pip)
 
 # the posteriors are the same
 plot(is_result$alpha[, 1], gss_result$alpha[, 1])
@@ -121,6 +139,7 @@ dp_result2 = vb_wlr(X, y, result$sigma0, .9, result$v_slab)
 
 # Bigger example ----------------------------------------------------------
 
+set.seed(1)
 d = 100
 n = 100
 X = cbind(mvtnorm::rmvnorm(n, rep(0, d), 5.*diag(d) + .5*rep(1, d) %*% t(rep(1, d))))
@@ -133,11 +152,12 @@ p0 = .1
 v_slab = .1
 
 tictoc::tic()
-result = epwpl::ep_wlr(X, y, v_noise, v_slab, p0, 
-                       max_iter = 1000,
-                       opt=TRUE,
+result = epwpl::ep_ss2(X, y, v_noise, v_slab, .01, 
+                       opt=FALSE, 
                        woodbury = FALSE)
 tictoc::toc()
+
+result
 
 tictoc::tic()
 gss_result = epwpl::GroupSpikeAndSlab(X, y, 
@@ -147,6 +167,30 @@ gss_result = epwpl::GroupSpikeAndSlab(X, y,
                                       v1 = v_slab, 
                                       verbose = TRUE, 
                                       opt=TRUE)
+tictoc::toc()
+
+## ep with grid prior and importance sampling ----
+n_grid = 50
+v_noise_grid = rep(v_noise, n_grid)
+v_slab_grid = rep(v_slab, n_grid)
+p_incl_grid = seq(.01, .9, length.out = n_grid)
+
+tictoc::tic()
+bvs_ep2_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                              opt = FALSE, damping = .9, k=1, 
+                              method = "ss_ep2")
+tictoc::toc()
+
+tictoc::tic()
+bvs_ep1_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                              opt = FALSE, damping = .9, k=1, 
+                              method = "ss_ep1")
+tictoc::toc()
+
+tictoc::tic()
+bvs_gss_result = epwpl::epvbs(X,y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                              opt=FALSE, damping=.9, k=1,
+                              method="gss")
 tictoc::toc()
 
 n_grid = 20

@@ -66,10 +66,12 @@ theta = expand.grid(list(
 ))
 
 tictoc::tic()
-result_fix = epwpl::wpl_ep_gss(data_mat, weight_mat_fit, 
-                       theta$v_noise, 
-                       theta$v_slab, 
-                       theta$p0, opt=FALSE, verbose=TRUE)
+result_fix = epwpl::epvbs(data_mat, weight_mat_fit, 
+                          theta$v_noise, 
+                          theta$v_slab, 
+                          theta$p0, opt=FALSE, verbose=FALSE,
+                          damping = .9, k = .99,
+                          method="gss")
 tictoc::toc()
 
 tictoc::tic()
@@ -91,7 +93,7 @@ result_fix = epwpl::wpl_ep(data_mat, weight_mat_fit,
                            theta$v_noise, 
                            theta$v_slab, 
                            theta$p0, 
-                           damping = 1, k = .99,
+                           damping = .9, k = .99,
                            opt=FALSE, verbose=TRUE)
 tictoc::toc()
 

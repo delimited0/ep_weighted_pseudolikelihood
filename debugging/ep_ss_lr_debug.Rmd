@@ -40,6 +40,7 @@ For GSS, converges to same solution regardless of damping:
 ```{r}
 par(mfrow = c(1, 2))
 
+eps_set = c(1, .9, .8, .7, .5, .25)
 iters = rep(NA, length(eps_set))
 mliks =  rep(NA, length(eps_set))
 
@@ -157,7 +158,7 @@ v_slab_grid = rep(v_slab, n_grid)
 p_incl_grid = seq(.01, .9, length.out = n_grid)
 
 eps_set = c(1, .99, .9, .8, .5, .25)
-k = .99
+k = 1
 
 par(mfrow = c(2, length(eps_set) / 2))
 
