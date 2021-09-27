@@ -58,7 +58,7 @@ vb_ss = function(X, y, v_noise, v_slab, p_incl, max_iter = 200, delta = 1e-4,
     }
     
     # elbo
-    e1 = -.5*log(2*pi*v_noise)
+    e1 = -.5*n*log(2*pi*v_noise)
     e2 = - sse / (2*v_noise)
     e3 = - var_beta / (2*v_noise)
     e4 = - sum(alpha * (log(alpha + eps) - log(p_incl)))

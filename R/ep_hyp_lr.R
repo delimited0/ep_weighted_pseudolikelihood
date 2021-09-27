@@ -10,8 +10,9 @@
 #' uniform discrete grid hyperprior
 #' assume prior logodds all the same for now
 epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
-                      delta = 1e-4, k = .99, damping = .5, woodbury = FALSE, opt = TRUE,
-                      method = "ep2", verbose = FALSE) {
+                 delta = 1e-4, k = .99, damping = .5, 
+                 woodbury = FALSE, opt = TRUE, opt_method = "Nelder-Mead",
+                 method = "ep2", verbose = FALSE) {
   
   p = ncol(X)
   n = nrow(X)
@@ -39,7 +40,8 @@ epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
                    damping = damping,
                    k = k,
                    woodbury = woodbury,
-                   opt = opt)
+                   opt = opt,
+                   opt_method = opt_method)
     }
     else if (method == "ss_ep1") {
       fit = ep_ss1(X, y, v_noise, v_slab, p_incl,

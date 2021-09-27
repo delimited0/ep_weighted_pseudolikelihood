@@ -111,15 +111,16 @@ result_opt = epwpl::wpl_ep(data_mat, weight_mat_fit,
                            rep(v_noise, n_pip), 
                            rep(v_slab, n_pip), 
                            p_incl_grid,
-                           damping = 1, k = .99,
-                           opt=TRUE, verbose=TRUE)
+                           damping = .9, k = .99,
+                           opt=TRUE, verbose=TRUE,
+                           opt_method="Nelder-Mead")
 tictoc::toc()
 
 tictoc::tic()
 result_vb_opt = epwpl::wpl_vb(data_mat, weight_mat_fit,
                               rep(v_noise, n_pip), 
                               rep(v_slab, n_pip), 
-                              p_incl_grid)
+                              p_incl_grid, opt=TRUE)
 tictoc::toc()
 
 tictoc::tic()

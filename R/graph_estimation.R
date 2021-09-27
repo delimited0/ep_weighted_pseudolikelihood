@@ -2,7 +2,8 @@
 wpl_ep = function(data_mat, weight_mat, 
                   v_noise_grid, v_slab_grid, p_incl_grid, 
                   damping = .5, k = .99,
-                  opt = TRUE, verbose = FALSE) {
+                  woodbury = FALSE, opt = TRUE, opt_method = "Nelder-Mead",
+                  verbose = FALSE) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
   # RhpcBLASctl::blas_set_num_threads(blas_threads)
@@ -34,10 +35,10 @@ wpl_ep = function(data_mat, weight_mat,
       X_weighted = X * sqrt_weight[i, ]
       
       fit = epwpl::epvbs(X_weighted, y_weighted, 
-                          v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                          damping = damping, k = k,
-                          opt = opt,
-                          method = "ss_ep2")
+                         v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
+                         damping = damping, k = k,
+                         woodbury = woodbury, opt = opt, opt_method = opt_method,
+                         method = "ss_ep2")
       
       graphs[[i]][resp_idx, -resp_idx] = t(fit$pip)
       results[[i]][[resp_idx]] = fit

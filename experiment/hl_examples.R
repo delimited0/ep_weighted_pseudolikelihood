@@ -25,7 +25,8 @@ plot(X[, 4], y)
 
 tictoc::tic()
 result_epss2 = epwpl::ep_ss2(X, y, v_noise, v_slab, p0, 
-                             damping=.9, k=.99)
+                             damping=.9, k=.99, opt=TRUE, 
+                             opt_method = "L-BFGS-B")
 tictoc::toc()
 
 tictoc::tic()
@@ -48,7 +49,7 @@ p_incl_grid = seq(.01, .9, length.out = n_grid)
 
 tictoc::tic()
 bvs_ep2_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                              opt = FALSE, damping = .9, k=1, 
+                              opt = TRUE, damping = .9, k=1, 
                               method = "ss_ep2")
 tictoc::toc()
 
@@ -152,9 +153,10 @@ p0 = .1
 v_slab = .1
 
 tictoc::tic()
-result = epwpl::ep_ss2(X, y, v_noise, v_slab, .01, 
-                       opt=FALSE, 
-                       woodbury = FALSE)
+result = epwpl::ep_ss2(X, y, v_noise, v_slab, .1, 
+                       opt=TRUE, 
+                       woodbury = FALSE,
+                       opt_method = "L-BFGS-B")
 tictoc::toc()
 
 result
@@ -167,6 +169,10 @@ gss_result = epwpl::GroupSpikeAndSlab(X, y,
                                       v1 = v_slab, 
                                       verbose = TRUE, 
                                       opt=TRUE)
+tictoc::toc()
+
+tictoc::tic()
+result_vb = epwpl::vb_ss(X, y, v_noise, v_slab, p0, opt=TRUE)
 tictoc::toc()
 
 ## ep with grid prior and importance sampling ----
@@ -203,7 +209,7 @@ result_grid = epwpl::ep_grid_ss(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_g
 
 vb_result_grid = epwpl::vb_grid_ss(X, y, 
                                    v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                                   opt=FALSE)
+                                   opt=TRUE)
 
 varbvs_result_grid = varbvs::varbvs(X=X, Z=NULL, y=y, family="gaussian",
                                     sigma=v_noise_grid, sa=v_slab_grid,

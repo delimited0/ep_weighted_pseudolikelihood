@@ -34,6 +34,7 @@ RhpcBLASctl::omp_set_num_threads(1)
 progressr::handlers("progress")
 
 # Discrete covariate, independent ------------------------------------------------------
+set.seed(1)
 n = 100
 p = 10
 
@@ -55,8 +56,8 @@ for(i in 1:(p+1)){
 diag(true_graph) = 0
 
 # compute weights
-tau = 1  # bandwidth
-weight_mat = weight_matrix(n, Z)
+tau = .1  # bandwidth
+weight_mat = epwpl::weight_matrix(n, Z, tau)
 
 # only two covariate levels --> only two weightings
 weight_mat_fit = weight_mat[c(1, n), ]  

@@ -210,7 +210,8 @@ ep_ss1 = function(X, y, v_noise, v_slab, p_incl,
 #' @param opt boolean, optimize hyperparameters or not?
 #' @export
 ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200, 
-                  delta = 1e-4, k = .99, damping = .5, woodbury = FALSE, opt = TRUE) {
+                  delta = 1e-4, k = .99, damping = .5, woodbury = FALSE, 
+                  opt = TRUE, opt_method = "Nelder-Mead") {
   
   d = ncol(X)
   n = length(y)
@@ -251,42 +252,71 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   iter = 0
   mlik_value = NA
   
-  mlik = function(params) {
-    v_noise = params[1]
-    v_slab = params[2]
+  if (opt) {
+    # define likelihood and gradient functions if optimizing variances
+    mlik = function(params) {
+      v_noise = params[1]
+      v_slab = params[2]
+      
+      logs1 = .5*(
+        tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
+          tms2Vms2 -
+          determinant(In + (XV_tX / v_noise))$modulus + 
+          sum(log1p(v_site2 / v_site1)) + 
+          sum_pmv3
+      )
+      
+      logc = log_sum_exp(
+        plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+        plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
+      )
+      
+      logs2 = .5*sum(
+        2*logc + 
+          log1p(v_site1 / v_site2) +
+          sum_pmv3 + 
+          2*log_sum_exp(
+            plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
+            plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)
+          ) -
+          2*(plogis(p_site3, log.p=TRUE) + plogis(-p_site3, log.p=TRUE))
+      )
+      
+      value = logs1 + logs2 + .5*d*log(2*pi) +
+        .5*sum(log(v)) - .5*sum_pmv3 +
+        sum(log_sum_exp(
+          plogis(p_site2, log.p = TRUE) + plogis(p_site3, log.p = TRUE),
+          plogis(-p_site2, log.p = TRUE) + plogis(-p_site3, log.p = TRUE)
+        ))
+      
+      return(-value)
+    }
     
-    logs1 = .5*(
-      tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
-        tms2Vms2 -
-        determinant(In + (XV_tX / v_noise))$modulus + 
-        sum(log1p(v_site2 / v_site1)) + 
-        sum_pmv3
-    )
-    
-    logc = log_sum_exp(
-      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
-      plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
-    )
-    
-    logs2 = .5*sum(
-      2*logc + 
-        log1p(v_site1 / v_site2) +
-        sum_pmv3 + 
-        2*log_sum_exp(
-          plogis(p, log.p=TRUE) + plogis(-p_site3, log.p=TRUE),
-          plogis(-p, log.p=TRUE) + plogis(p_site3, log.p=TRUE)
-        ) -
-        2*(plogis(p_site3, log.p=TRUE) + plogis(-p_site3, log.p=TRUE))
-    )
-    
-    value = logs1 + logs2 + .5*d*log(2*pi) +
-      .5*sum(log(v)) - .5*sum_pmv3 +
-      sum(log_sum_exp(
-        plogis(p_site2, log.p = TRUE) + plogis(p_site3, log.p = TRUE),
-        plogis(-p_site2, log.p = TRUE) + plogis(-p_site3, log.p = TRUE)
+    grad = function(params) {
+      v_noise = params[1]
+      v_slab = params[2]
+      
+      cons = 
+        plogis(p_site3) * dnorm(0, m_site1, v_site1 + v_slab) +
+        plogis(-p_site3) * dnorm(0, m_site1, v_site1)
+      
+      if (woodbury) {
+        dlogalpha_dvnoise = -sum(diag(XV_tX %*% solve(In + XV_tX / v_noise))) / v_noise^2
+      }
+      else {
+        dlogalpha_dvnoise = -sum(diag(V_site2 %*% tXX %*% solve(diag(p) + V_site2 %*% tXX / v_noise))) / v_noise^2    
+      }
+      dlogs1_dvnoise = -.5 * tmtXy / v_noise^2 - .5 * yty - .5 * n / v_noise
+      dlogs2_dvslab = .5 * sum( 
+        cons^(-1) * dnorm(0, m_site1, v_site1 + v_slab) * 
+          (m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab^2)
+      )
+      
+      return(c(
+        dlogalpha_dvnoise + dlogs1_dvnoise,
+        dlogs2_dvslab
       ))
-    
-    return(-value)
+    }
   }
   
   # EP iterations ----
@@ -369,9 +399,21 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     
     # optimize hyperparameters
     if (opt) {
-      hyper_opt = dfoptim::nmkb(par = c(v_noise, v_slab), 
-                                fn = mlik,
-                                lower = c(0, 0), upper = c(Inf, Inf))
+      
+      if (opt_method == "Nelder-Mead") {
+        hyper_opt = dfoptim::nmkb(par = c(v_noise, v_slab),
+                                  fn = mlik,
+                                  lower = c(0, 0), upper = c(Inf, Inf))
+      }
+      else if (opt_method == "L-BFGS-B") {
+        hyper_opt = optim(par = c(v_noise, v_slab), fn = mlik, gr = grad,
+                          lower = c(0, 0), upper = c(Inf, Inf), 
+                          method = opt_method)  
+      }
+      else {
+        stop("Invalid optimization method")
+      }
+      
       
       v_noise = hyper_opt$par[1]
       v_slab = hyper_opt$par[2]
