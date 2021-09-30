@@ -43,6 +43,33 @@ score_model = function(method = "method", graph, true_graph, individual,
   )
 }
 
+#' @export
+score_graphs = function(estimates, true_graphs, 
+                        threshold = .5, 
+                        symmetrizer = mean_symmetrize) {
+  
+  n_individuals = length(estimates$individuals)
+  p = estimates$p
+  
+  score_table = rbindlist(lapply(1:n_individuals, function(i) {
+    
+    est = estimates$individuals[[i]]
+    tg = true_graphs[[i]]
+    est_graph = symmetrizer(1 * (est$graph > threshold))
+    
+    data.frame(
+      method = estimates$method_name,
+      sensitivity = sum(est_graph & tg) / sum(tg),
+      specificity = sum(!est_graph & !true_graph) / sum(!true_graph),
+      individual = i,
+      covariate = est$covariates,
+      p = p
+    )
+  }))
+  
+  return(score_table) 
+}
+
 incl_prob_model = function(method = "method", graph, individual, simulation, 
                            covariate, p) {
   
@@ -58,13 +85,15 @@ incl_prob_model = function(method = "method", graph, individual, simulation,
 }
 
 #' @export
-weight_matrix = function(n, cov_mat, tau) {
-  p = ncol(cov_mat)
+weight_matrix = function(covariates, tau) {
+  
+  n = nrow(covariates)
+  p = ncol(covariates)
   
   weight_mat = matrix(1, n, n)
   for(i in 1:n){
     for(j in 1:n){
-      weight_mat[i, j] = dnorm(norm(cov_mat[i, ] - cov_mat[j, ], "2"), 0, tau)
+      weight_mat[i, j] = dnorm(norm(covariates[i, ] - covariates[j, ], "2"), 0, tau)
     }
   }
   

@@ -1,11 +1,10 @@
 library(data.table)
-source("experiment/simulation.R")
 setDTthreads(1)
 
 # record keeping ----------------------------------------------------------
 
 score_model = function(method = "unnamed method", graph, true_graph, individual, 
-                       simulation, covariate, p, w = 1) {
+                       simulation, covariate, p, vb_weight = 1) {
   if (is.null(p)) {
     p = nrow(graph) - 1
   }
@@ -23,6 +22,8 @@ score_model = function(method = "unnamed method", graph, true_graph, individual,
     w = w
   )
 }
+
+score_model = function(method_name = "unnamed method", )
 
 # Parallel control --------------------------------------------------------
 library(doRNG)
@@ -45,7 +46,8 @@ Var1 = solve(Lam1 %*% t(Lam1) + diag(rep(10, p+1))) #covariance matrix for covar
 Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covariate level 2
 
 # covariate matrix
-Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
+Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = 1, byrow = FALSE)
+tau = .1  # weighting bandwidth
 
 # true graph
 true_graph = matrix(0, p+1, p+1)
@@ -54,29 +56,13 @@ for(i in 1:(p+1)){
     true_graph[i,j] = (Lam1[i] != 0 & Lam1[j] != 0)
   }}
 diag(true_graph) = 0
+true_individual_graphs = replicate(n, true_graph, simplify = FALSE)
 
-# compute weights
-tau = .1  # bandwidth
-weight_mat = epwpl::weight_matrix(n, Z, tau)
-
-# only two covariate levels --> only two weightings
-weight_mat_fit = weight_mat[c(1, n), ]  
 
 # hyperparameter grid
-p_incl_grid = seq(.05, .25, .05)
-n_grid = length(p_incl_grid)
-# v_noise_grid = rep(1, n_grid)
-# v_slab_grid = rep(3, n_grid)
-
-v_noise_grid = c(0.01, 0.05, 0.1, 0.5, 1)
-v_slab_grid = c(0.01, 0.05, 0.1, 0.5, 1)
-
-# averaging over cartesian product of hyper param settings
-theta = expand.grid(list(
-  p_incl_grid = p_incl_grid, 
-  v_noise = v_noise_grid,
-  v_slab = v_slab_grid
-))
+p_incl_grid = seq(.05, .8, .05)
+v_noise = 1
+v_slab = 1
 
 n_sim = 50
 
@@ -96,38 +82,42 @@ progressr::with_progress({
       data_mat = rbind(X1, X2)
       
       # fit the 2 x p distinct regression models
-      vb_result = wpl_varbvs(data_mat, weight_mat_fit, 
-                             v_noise_grid = theta$v_noise_grid, 
-                             v_slab_grid = theta$v_slab_grid,
-                             p_incl_grid = theta$p_incl_grid,
-                             opt = FALSE)
+      varbvs_vopt_result = 
+        epwpl::wpl_varbvs(data_mat, Z, tau, 
+                          v_noise_grid = v_noise, 
+                          v_slab_grid = v_slab,
+                          p_incl_grid = p_incl_grid,
+                          opt = TRUE)
       
-      ep_result = wpl_ep_gss(data_mat, weight_mat_fit,
-                             v_noise_grid,
-                             v_slab_grid,
-                             p_incl_grid, 
-                             damping = 1, k = .99,
-                             opt = FALSE,
-                             opt_upper = c(100, Inf))
+      ep_vopt_result = 
+        epwpl::wpl_ep(data_mat, Z, tau,
+                      v_noise_grid = v_noise,
+                      v_slab_grid = v_slab,
+                      p_incl_grid = p_incl_grid,
+                      damping = .9, k = .99,
+                      opt = TRUE)
       
-      # vb_result = wpl_vb_regression(data_mat, weight_mat_fit, 
-      #                               ep_result$sigma_noise, p0, ep_result$v_slab)
+      epwpl::score_graphs(ep_vopt_result, list(true_graph, true_graph))
+      epwpl::score_graphs(varbvs_vopt_result, list(true_graph, true_graph))
       
       metrics = rbind(
-        score_model("VB", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
+        score_model("varbvs_fix", mean_symmetrize(vsvb_result$graphs[[1]]), true_graph,
                     1, sim_idx, -.1, p, 1),
-        score_model("VB", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
+        score_model("varbvs_fix", mean_symmetrize(vsvb_result$graphs[[n]]), true_graph,
                     2, sim_idx, .1, p, 1),
         
         score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[1]]), true_graph, 
                     1, sim_idx, -.1, p, 0),
-        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[2]]), true_graph, 
+        score_model("EP_fix", mean_symmetrize(ep_fix_result$graphs[[n]]), true_graph, 
                     2, sim_idx, .1, p, 0),
         
         score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[1]]), true_graph, 
                     1, sim_idx, -.1, p, 0),
-        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[2]]), true_graph, 
+        score_model("EP_opt", mean_symmetrize(ep_opt_result$graphs[[n]]), true_graph, 
                     2, sim_idx, .1, p, 0)
+        
+        score_model("combo_25", 
+                    mean_symmetrize(.25 * vsvb_result$graphs[[1]] + .75 * ep_fix_result$graphs[[1]]))
       )
       
       combo_metrics = rbindlist(lapply(cvx_wgts, function(w) {

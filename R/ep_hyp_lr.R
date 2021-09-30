@@ -12,11 +12,17 @@
 epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
                  delta = 1e-4, k = .99, damping = .5, 
                  woodbury = FALSE, opt = TRUE, opt_method = "Nelder-Mead",
-                 method = "ep2", verbose = FALSE) {
+                 method = "ep2", verbose = FALSE,
+                 lb = c(0, 0), ub = c(Inf, Inf)) {
   
   p = ncol(X)
   n = nrow(X)
   ns = length(logodds)
+  
+  if (length(sigma) == 1 && length(sa) == 1) {
+    sigma = rep(sigma, ns)
+    sa = rep(sa, ns)
+  }
   
   mliks = rep(NA, ns)
   post_incls = matrix(NA, p, ns)
@@ -41,7 +47,8 @@ epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
                    k = k,
                    woodbury = woodbury,
                    opt = opt,
-                   opt_method = opt_method)
+                   opt_method = opt_method,
+                   lb = lb, ub = ub)
     }
     else if (method == "ss_ep1") {
       fit = ep_ss1(X, y, v_noise, v_slab, p_incl,

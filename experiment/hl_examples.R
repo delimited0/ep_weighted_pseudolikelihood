@@ -156,7 +156,8 @@ tictoc::tic()
 result = epwpl::ep_ss2(X, y, v_noise, v_slab, .1, 
                        opt=TRUE, 
                        woodbury = FALSE,
-                       opt_method = "L-BFGS-B")
+                       opt_method = "L-BFGS-B",
+                       lb = c(.0001, .0001))
 tictoc::toc()
 
 result
@@ -179,12 +180,13 @@ tictoc::toc()
 n_grid = 50
 v_noise_grid = rep(v_noise, n_grid)
 v_slab_grid = rep(v_slab, n_grid)
-p_incl_grid = seq(.01, .9, length.out = n_grid)
+p_incl_grid = seq(.1, .9, length.out = n_grid)
 
 tictoc::tic()
 bvs_ep2_result = epwpl::epvbs(X, y, v_noise_grid, v_slab_grid, qlogis(p_incl_grid),
-                              opt = FALSE, damping = .9, k=1, 
-                              method = "ss_ep2")
+                              opt = TRUE, opt_method = "L-BFGS-B", damping = .9, k=.99, 
+                              method = "ss_ep2", lb = c(1e-6, 1e-6),
+                              woodbury = TRUE)
 tictoc::toc()
 
 tictoc::tic()
