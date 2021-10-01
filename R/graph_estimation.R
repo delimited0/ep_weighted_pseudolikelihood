@@ -1,27 +1,27 @@
 #' @export
-wpl_ep = function(data_mat, covariates, tau,
+wpl_ep = function(data_mat, covariates, tau, weight_mat = NULL,
                   v_noise_grid, v_slab_grid, p_incl_grid, 
                   damping = .5, k = .99,
                   woodbury = FALSE, 
                   opt = TRUE, opt_method = "Nelder-Mead",
                   lb = c(0, 0), ub = c(Inf, Inf),
                   verbose = FALSE, method = "ss_ep2",
-                  n_threads = 1) {
+                  n_threads = 1, blas_threads = 1) {
   # registerDoFuture()
   # plan(multisession, workers = n_threads)
-  # RhpcBLASctl::blas_set_num_threads(blas_threads)
-  # RhpcBLASctl::omp_set_num_threads(blas_threads)
+  RhpcBLASctl::blas_set_num_threads(blas_threads)
+  RhpcBLASctl::omp_set_num_threads(blas_threads)
   
   p = ncol(data_mat)
-  n = nrow(covariates)
+  ns = length(p_incl_grid)
   
-  weight_mat = weight_matrix(covariates, tau)
+  if (is.null(weight_mat)) 
+    weight_mat = weight_matrix(covariates, tau)
   sqrt_weight = sqrt(weight_mat)
+  n = nrow(sqrt_weight)
   
   individuals = vector("list", n)
 
-  model_llik = 0
-  
   # progressr::with_progress({
   #   prog = progressr::progressor(along = 1:n)
   
@@ -30,11 +30,12 @@ wpl_ep = function(data_mat, covariates, tau,
     
     graph = matrix(0, p, p)
     fits = vector("list", p)
-    llik = 0
+    llik = matrix(NA, p, ns)
     
     for (resp_idx in 1:p) {
       
-      print(sprintf("Individual: %d, dimension: %d", i, resp_idx))
+      if (verbose)
+        print(sprintf("Individual: %d, dimension: %d", i, resp_idx))
       
       y = data_mat[, resp_idx]
       X = data_mat[, -resp_idx]
@@ -49,15 +50,13 @@ wpl_ep = function(data_mat, covariates, tau,
       
       graph[resp_idx, -resp_idx] = t(fit$pip)
       fits[[resp_idx]] = fit
-      llik = llik + fit$llik
+      llik[resp_idx, ] = fit$mliks
     }
     
     individuals[[i]]$graph = graph
     individuals[[i]]$fits = fits
     individuals[[i]]$llik = llik
     individuals[[i]]$covariates = covariates[i, ]
-    
-    model_llik = model_llik + llik
   }
   # })
   
@@ -69,9 +68,7 @@ wpl_ep = function(data_mat, covariates, tau,
          opt_method = opt_method,
          damping = damping,
          k = k,
-         method_name = method,
-         # covariates = covariates,
-         llik = model_llik
+         method_name = method
     )
   )
 }
@@ -182,15 +179,18 @@ wpl_vb = function(data_mat, weight_mat,
 }
 
 #' @export
-wpl_varbvs = function(data_mat, covariates, tau,
+wpl_varbvs = function(data_mat, covariates, tau, weight_mat = NULL,
                       v_noise_grid, v_slab_grid, p_incl_grid,
-                      opt = TRUE, verbose = FALSE) {
+                      opt = TRUE, verbose = FALSE, blas_threads = 1) {
+  RhpcBLASctl::blas_set_num_threads(blas_threads)
+  RhpcBLASctl::omp_set_num_threads(blas_threads)
   
   p = ncol(data_mat)
-  n = nrow(covariates)
   
-  weight_mat = weight_matrix(covariates, tau)
+  if (is.null(weight_mat)) 
+    weight_mat = weight_matrix(covariates, tau)
   sqrt_weight = sqrt(weight_mat)
+  n = nrow(covariates)
   
   individuals = vector("list", n)
   
@@ -204,7 +204,8 @@ wpl_varbvs = function(data_mat, covariates, tau,
     
     for (resp_idx in 1:p) {
       
-      print(sprintf("Individual: %d, dimension: %d", i, resp_idx))
+      if (verbose)
+        print(sprintf("Individual: %d, dimension: %d", i, resp_idx))
       
       y = data_mat[, resp_idx]
       X = data_mat[, -resp_idx]

@@ -73,15 +73,17 @@ ep_ss1 = function(X, y, v_noise, v_slab, p_incl,
     )
 
     upsilon = mPrec_site1 + Lambda_inv %*% m_site2
-    Xv = matrix(upsilon, nrow = 1)
-    Xs = X * matrix(v_site2, n, d, byrow = TRUE)  # X \Lambda
-    M = solve(In / v_noise + Xs %*% t(X))  # inv(I * sigma^2 + X \Lambda X^T)
+    # Xv = matrix(upsilon, nrow = 1)
+    # Xs = X * matrix(v_site2, n, d, byrow = TRUE)  # X \Lambda
+    # M = solve(In / v_noise + Xs %*% t(X))  # inv(I * sigma^2 + X \Lambda X^T)
+    # 
+    # Tv = Xs %*% t(Xv)
+    # Cv = t.default(Xv) * matrix(v_site2, d, nrow(Xv)) - t(Xs) %*% (M %*% Tv)
+    # nutVnu <- colSums(Cv * t.default(Xv))
+    nutVnu = t(upsilon) %*% V %*% upsilon
     
-    Tv = Xs %*% t(Xv)
-    Cv = t.default(Xv) * matrix(v_site2, d, nrow(Xv)) - t(Xs) %*% (M %*% Tv)
-    nutVnu <- colSums(Cv * t.default(Xv))
-    
-    logdetV = (sum(log(v_site2)) - determinant(diag(n) + v_noise * X %*% (matrix(v_site2, d, n) * t(X)))$modulus[[1]])
+    # logdetV = (sum(log(v_site2)) - determinant(diag(n) + v_noise * X %*% (matrix(v_site2, d, n) * t(X)))$modulus[[1]])
+    logdetV = determinant(V)$modulus
 
     value =
       logs1 + logs2 +
@@ -122,7 +124,6 @@ ep_ss1 = function(X, y, v_noise, v_slab, p_incl,
     
     # handle negative variances
     update_dims = !(v_cavity < 0)
-    update_dims = 1:d
     v_site2_negative = v_site2_new < 0
     v_site2_new[v_site2_negative] = v_inf
     
@@ -414,6 +415,11 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
           lbfgsb3c::lbfgsb3c(par = c(v_noise, v_slab), fn = mlik, gr = grad,
                              lower = lb, upper = ub)
       }
+      else if (opt_method == "BOBYQA") {
+        hyper_opt = minqa::bobyqa(par = c(v_noise, v_slab),
+                                  fn = mlik,
+                                  lower = lb, upper = ub)
+      }
       else {
         stop("Invalid optimization method")
       }
@@ -429,7 +435,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   
   mlik_value = -mlik(c(v_noise, v_slab))
   
-  result <- list(
+  result = list(
     m = m,
     v = v,
     logisp = p,
@@ -437,7 +443,8 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     iters = iter,
     v_noise = v_noise,
     v_slab = v_slab,
-    llik = mlik_value
+    llik = mlik_value,
+    opt_result = hyper_opt
   )
   
   return(result)
