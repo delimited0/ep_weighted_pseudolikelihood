@@ -11,7 +11,11 @@ RhpcBLASctl::omp_set_num_threads(1)
 
 progressr::handlers("progress")
 
-# Discrete covariate, independent ------------------------------------------------------
+
+# Optimize variance -------------------------------------------------------
+
+
+## Discrete covariate, independent ------------------------------------------------------
 set.seed(1)
 n = 100
 p = 10
@@ -93,7 +97,7 @@ progressr::with_progress({
 filename = paste0("data/hyper_avg/discrete_independent.RDS")
 saveRDS(metrics, file = filename)
 
-# No covariate model ------------------------------------------------------
+## No covariate model ------------------------------------------------------
 set.seed(1)
 n = 100
 p = 10
@@ -106,6 +110,7 @@ Var2 = solve(Lam2 %*% t(Lam2) + diag(rep(10, p+1))) #covariance matrix for covar
 
 Z = matrix(NA, 1, 1)
 weight_mat = matrix(1, 1, n)  # weights all 1 in no covariate case
+tau = .1
 
 # true graph
 true_graph = matrix(0, p+1, p+1)
@@ -114,6 +119,7 @@ for(i in 1:(p+1)){
     true_graph[i,j] = (Lam1[i] != 0 & Lam1[j] != 0)
   }}
 diag(true_graph) = 0
+true_individual_graphs = list(true_graph)
 
 # hyperparameter grid
 p_incl_grid = seq(.05, .8, .05)
@@ -152,7 +158,7 @@ progressr::with_progress({
                     p_incl_grid = p_incl_grid,
                     damping = .9, k = .99,
                     opt = TRUE, 
-                    opt_method = "BOBYQA")
+                    opt_method = "Nelder-Mead")
     
     metrics = rbind(
       epwpl::score_graphs(ep_vopt_result, true_individual_graphs),
@@ -170,11 +176,7 @@ progressr::with_progress({
 filename = paste0("data/hyper_avg/no_covariate.RDS")
 saveRDS(metrics, file = filename)
 
-# Discrete covariate, dependent ------------------------------------------------------
-
-set.seed(1)
-n = 100
-n_sim = 50
+## Discrete covariate, dependent ------------------------------------------------------
 
 set.seed(1)
 n = 100
@@ -193,17 +195,17 @@ for (p in c(10, 30, 50)) {
   
   # covariate matrix
   Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = 1, byrow = FALSE)
-  
-  # compute weights
-  tau = 1  # bandwidth
-  weight_mat = weight_matrix(n, Z)
-  weight_mat_fit = weight_mat[c(1, n), ]
+  Z_all = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
+  Z_2 = matrix(c(-.1, .1), nrow = 2, ncol = 1, byrow = FALSE)
+  tau = .1  # weighting bandwidth
+  weight_mat = epwpl::weight_matrix(Z_all, tau)[c(1, n), ]
   
   # true graphs
   true_graph_neg = Prec1 != 0
   diag(true_graph_neg) = 0
   true_graph_pos = Prec2 != 0
   diag(true_graph_pos) = 0
+  true_individual_graphs = list(true_graph_neg, true_graph_pos)
   
   # hyperparameter grid
   p_incl_grid = seq(.05, .8, .05)
@@ -226,7 +228,7 @@ for (p in c(10, 30, 50)) {
       # fit the 2 x p distinct regression models
       varbvs_vopt_result = 
         epwpl::wpl_varbvs(data_mat, 
-                          covariates = Z, tau = tau, weight_mat = weight_mat, 
+                          covariates = Z_2, tau = tau, weight_mat = weight_mat, 
                           v_noise_grid = v_noise, 
                           v_slab_grid = v_slab,
                           p_incl_grid = p_incl_grid,
@@ -234,7 +236,7 @@ for (p in c(10, 30, 50)) {
       
       ep_vopt_result = 
         epwpl::wpl_ep(data_mat, 
-                      covariates = Z, tau = tau, weight_mat = weight_mat,
+                      covariates = Z_2, tau = tau, weight_mat = weight_mat,
                       v_noise_grid = v_noise,
                       v_slab_grid = v_slab,
                       p_incl_grid = p_incl_grid,
@@ -253,8 +255,13 @@ for (p in c(10, 30, 50)) {
       
       metrics
     }
-    
   })
+  
+  filename = paste0("data/hyper_avg/discrete_dependent_", "p=", p, ".RDS")
+  saveRDS(metrics, file = filename)
 }
+
+
+
   
 

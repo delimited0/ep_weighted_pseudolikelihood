@@ -190,7 +190,7 @@ wpl_varbvs = function(data_mat, covariates, tau, weight_mat = NULL,
   if (is.null(weight_mat)) 
     weight_mat = weight_matrix(covariates, tau)
   sqrt_weight = sqrt(weight_mat)
-  n = nrow(covariates)
+  n = nrow(sqrt_weight)
   
   individuals = vector("list", n)
   

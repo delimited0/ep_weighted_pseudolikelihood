@@ -16,9 +16,7 @@ plt = ggplot(metrics_long, aes(x = value, fill = method)) +
   coord_flip() +
   theme_bw() +
   theme(legend.position = "right")
-
-
-
+plt
 
 
 # No covariates -----------------------------------------------------------
