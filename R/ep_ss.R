@@ -412,7 +412,8 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
         #                   lower = lb, upper = ub, 
         #                   method = opt_method)  
         hyper_opt = 
-          lbfgsb3c::lbfgsb3c(par = c(v_noise, v_slab), fn = mlik, gr = grad,
+          lbfgsb3c::lbfgsb3c(par = c(v_noise, v_slab), fn = mlik, 
+                             gr = grad,
                              lower = lb, upper = ub)
       }
       else if (opt_method == "BOBYQA") {

@@ -212,3 +212,71 @@ old_result = wpl_ep_regression(data_mat, weight_mat_fit,
 score_model("EP_opt", epwpl::mean_symmetrize(old_result$graphs[[1]]), 
             true_graph_neg, 1, 1, -.1, p)
 
+
+# continuous ----
+n = 180
+p = 4
+
+Prec_cont = function(z) {
+  
+  STR = 1
+  
+  pr = matrix(0, p+1, p+1)
+  diag(pr) = 2
+  
+  pr[2,3] = STR
+  pr[1,2] = STR*((z>-1) && (z< -.33)) + (STR - STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (0)*((z>0.43) && (z<1))
+  pr[1,3] = 0*((z>-1) && (z< -.33)) + (STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (STR)*((z>0.43) && (z<1))
+  
+  pr[2,1] = pr[1,2]
+  pr[3,1] = pr[1,3]
+  pr[3,2] = pr[2,3]
+  
+  return(pr)
+  # Var = solve(pr)
+  # return(Var)
+}
+
+Z = c(seq(-0.99, -0.331, (-.331+.99)/59), 
+      seq(-0.229,0.329,(.329+.229)/59),
+      seq(0.431,.99,(.99-.431)/59))
+Z = matrix(Z, n, 1)
+X = matrix(0, n, p+1)
+
+p_incl_grid = seq(.05, .8, .05)
+v_slab = 3
+sigma0 = 1
+tau = 0.56
+
+n_sim = 50
+
+# simulate data
+for(i in 1:n) {
+  X[i, ] = MASS::mvrnorm(1, rep(0, p+1), solve(Var_cont(Z[i])))
+}
+data_mat = X
+
+# weight matrix
+weight_mat = weight_matrix(Z, tau)
+
+tictoc::tic()
+ep_vopt_result = 
+  epwpl::wpl_ep(data_mat, 
+                covariates = Z, tau = tau, weight_mat = weight_mat,
+                v_noise_grid = v_noise,
+                v_slab_grid = v_slab,
+                p_incl_grid = p_incl_grid,
+                damping = .9, k = .99,
+                opt = TRUE, 
+                opt_method = "Nelder-Mead",
+                verbose = TRUE)
+tictoc::toc()
+
+ep_opt_probs = rbindlist(lapply(1:n, function(i) {
+  graph = ep_vopt_result$individuals[[i]]$graph
+  incl_prob_model("EP_opt", mean_symmetrize(graph), i, 1, Z[i, ], p) 
+}))
+
+ggplot()
+
+

@@ -195,7 +195,7 @@ for (p in c(10, 30, 50)) {
   
   # covariate matrix
   Z = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = 1, byrow = FALSE)
-  Z_all = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = p, byrow = FALSE)
+  Z_all = matrix(-.1*(1:n <= n/2)  + .1*(1:n > n/2), nrow = n, ncol = 1, byrow = FALSE)
   Z_2 = matrix(c(-.1, .1), nrow = 2, ncol = 1, byrow = FALSE)
   tau = .1  # weighting bandwidth
   weight_mat = epwpl::weight_matrix(Z_all, tau)[c(1, n), ]
@@ -242,7 +242,8 @@ for (p in c(10, 30, 50)) {
                       p_incl_grid = p_incl_grid,
                       damping = .9, k = .99,
                       opt = TRUE, 
-                      opt_method = "Nelder-Mead")
+                      opt_method = "Nelder-Mead",
+                      lb = c(1e-5, 1e-5))
       
       metrics = rbind(
         epwpl::score_graphs(ep_vopt_result, true_individual_graphs),
@@ -260,6 +261,109 @@ for (p in c(10, 30, 50)) {
   filename = paste0("data/hyper_avg/discrete_dependent_", "p=", p, ".RDS")
   saveRDS(metrics, file = filename)
 }
+
+
+# Continuous covariate ----------------------------------------------------
+
+n = 180
+p = 4
+
+Var_cont = function(z) {
+  
+  STR = 1
+  
+  pr = matrix(0, p+1, p+1)
+  diag(pr) = 2
+  
+  pr[2,3] = STR
+  pr[1,2] = STR*((z>-1) && (z< -.33)) + (STR - STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (0)*((z>0.43) && (z<1))
+  pr[1,3] = 0*((z>-1) && (z< -.33)) + (STR*((z+.23)/.56)) * ((z>-0.23) && (z<0.33)) + (STR)*((z>0.43) && (z<1))
+  
+  pr[2,1] = pr[1,2]
+  pr[3,1] = pr[1,3]
+  pr[3,2] = pr[2,3]
+  
+  
+  Var = solve(pr)
+  return(Var)
+}
+
+Z = c(seq(-0.99, -0.331, (-.331+.99)/59), 
+      seq(-0.229,0.329,(.329+.229)/59),
+      seq(0.431,.99,(.99-.431)/59))
+Z = matrix(Z, n, 1)
+X = matrix(0, n, p+1)
+
+p_incl_grid = seq(.05, .8, .05)
+v_slab = 3
+sigma0 = 1
+tau = 0.56
+
+n_sim = 50
+
+progressr::with_progress({
+  prog = progressr::progressor(along = 1:n_sim)
+  
+  # incl_prob_dt = rbindlist(
+  
+  incl_prob_dt = 
+    foreach(sim_idx = 1:n_sim, .combine = rbind) %dorng% {
+      
+      prog(sprintf("Simulation %g, %s", p, sim_idx, Sys.time()))
+      
+      # simulate data
+      for(i in 1:n) {
+        X[i, ] = MASS::mvrnorm(1, rep(0, p+1), Var_cont(Z[i]))
+      }
+      data_mat = X
+      
+      # weight matrix
+      weight_mat = weight_matrix(Z, tau)
+    
+      # fit the 2 x p distinct regression models
+      varbvs_vopt_result = 
+        epwpl::wpl_varbvs(data_mat, 
+                          covariates = Z, tau = tau, weight_mat = weight_mat, 
+                          v_noise_grid = v_noise, 
+                          v_slab_grid = v_slab,
+                          p_incl_grid = p_incl_grid,
+                          opt = TRUE)
+      
+      ep_vopt_result = 
+        epwpl::wpl_ep(data_mat, 
+                      covariates = Z, tau = tau, weight_mat = weight_mat,
+                      v_noise_grid = v_noise,
+                      v_slab_grid = v_slab,
+                      p_incl_grid = p_incl_grid,
+                      damping = .9, k = .99,
+                      opt = TRUE, 
+                      opt_method = "Nelder-Mead",
+                      verbose = TRUE)
+      
+      # ep_vopt_probs = rbindlist(lapply(1:n, function(i) {
+      #   graph = ep_vopt_result$individuals[[i]]$graph
+      #   incl_prob_model("EP_opt", mean_symmetrize(graph), i, sim_idx, Z[i, ], p) 
+      # }))
+      
+      # probs = rbind(vsvb_probs, ep_fix_probs, ep_opt_probs)
+      
+      filename = paste0("data/hyper_avg/continuous/",
+                        "ep_",
+                        Sys.Date(),
+                        "_sim=", sim_idx,
+                        "_dependent_covariate.RDS")
+      saveRDS(ep_vopt_result, file = filename)
+      
+      filename = paste0("data/hyper_avg/continuous/",
+                        "varbvs_",
+                        Sys.Date(),
+                        "_sim=", sim_idx,
+                        "_dependent_covariate.RDS")
+      saveRDS(varbvs_vopt_result, file = filename)
+    }
+})
+
+
 
 
 
