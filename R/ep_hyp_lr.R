@@ -94,6 +94,7 @@ epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
   result = list(
     sigma = sigma_vec,
     sa = sa_vec,
+    logodds = logodds,
     w = weights,
     alpha = post_incls,
     mu = mu_mat,

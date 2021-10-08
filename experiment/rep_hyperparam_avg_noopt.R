@@ -12,9 +12,6 @@ RhpcBLASctl::omp_set_num_threads(1)
 progressr::handlers("progress")
 
 
-# Optimize variance -------------------------------------------------------
-
-
 ## Discrete covariate, independent ------------------------------------------------------
 set.seed(1)
 n = 100
@@ -43,8 +40,10 @@ true_individual_graphs = replicate(2, true_graph, simplify = FALSE)
 
 # hyperparameter grid
 p_incl_grid = seq(.05, .8, .05)
-v_noise = 1
-v_slab = 3
+v_noise_grid = c(0.01,0.05,0.1,0.5,1,3,7,10)
+v_slab_grid = c(0.01,0.05,0.1,0.5,1,3,7,10)
+
+theta = expand.grid()
 
 n_sim = 50
 
@@ -53,44 +52,44 @@ progressr::with_progress({
   prog = progressr::progressor(along = 1:n_sim)
   
   metrics = foreach(sim_idx = 1:n_sim, .combine = rbind) %dorng% {
-  # for (sim_idx in 1:n_sim) {
-      
-      prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
-      
-      # simulate the data for this iteration
-      X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
-      X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
-      data_mat = rbind(X1, X2)
-      
-      # fit the 2 x p distinct regression models
-      varbvs_vopt_result = 
-        epwpl::wpl_varbvs(data_mat, 
-                          covariates = Z_2, tau = tau, weight_mat = weight_mat, 
-                          v_noise_grid = v_noise, 
-                          v_slab_grid = v_slab,
-                          p_incl_grid = p_incl_grid,
-                          opt = TRUE)
-      
-      ep_vopt_result = 
-        epwpl::wpl_ep(data_mat, 
-                      covariates = Z_2, tau = tau, weight_mat = weight_mat,
-                      v_noise_grid = v_noise,
-                      v_slab_grid = v_slab,
-                      p_incl_grid = p_incl_grid,
-                      damping = .9, k = .99,
-                      opt = TRUE, 
-                      opt_method = "Nelder-Mead")
-      
-      metrics = rbind(
-        epwpl::score_graphs(ep_vopt_result, true_individual_graphs),
-        epwpl::score_graphs(varbvs_vopt_result, true_individual_graphs),
-        epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .25, true_individual_graphs),
-        epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .5, true_individual_graphs),
-        epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .75, true_individual_graphs)
-      )
-      metrics[, sim_idx := sim_idx]
-      
-      metrics
+    # for (sim_idx in 1:n_sim) {
+    
+    prog(sprintf("Simulation %g, %s", sim_idx, Sys.time()))
+    
+    # simulate the data for this iteration
+    X1 = MASS::mvrnorm(n/2, rep(0, p+1), Var1)
+    X2 = MASS::mvrnorm(n/2, rep(0, p+1), Var2)
+    data_mat = rbind(X1, X2)
+    
+    # fit the 2 x p distinct regression models
+    varbvs_vopt_result = 
+      epwpl::wpl_varbvs(data_mat, 
+                        covariates = Z_2, tau = tau, weight_mat = weight_mat, 
+                        v_noise_grid = v_noise, 
+                        v_slab_grid = v_slab,
+                        p_incl_grid = p_incl_grid,
+                        opt = TRUE)
+    
+    ep_vopt_result = 
+      epwpl::wpl_ep(data_mat, 
+                    covariates = Z_2, tau = tau, weight_mat = weight_mat,
+                    v_noise_grid = v_noise,
+                    v_slab_grid = v_slab,
+                    p_incl_grid = p_incl_grid,
+                    damping = .9, k = .99,
+                    opt = TRUE, 
+                    opt_method = "Nelder-Mead")
+    
+    metrics = rbind(
+      epwpl::score_graphs(ep_vopt_result, true_individual_graphs),
+      epwpl::score_graphs(varbvs_vopt_result, true_individual_graphs),
+      epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .25, true_individual_graphs),
+      epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .5, true_individual_graphs),
+      epwpl::score_combo_graphs(ep_vopt_result, varbvs_vopt_result, .75, true_individual_graphs)
+    )
+    metrics[, sim_idx := sim_idx]
+    
+    metrics
   }
 })
 
@@ -318,7 +317,7 @@ progressr::with_progress({
       
       # weight matrix
       weight_mat = epwpl::weight_matrix(Z, tau)
-    
+      
       # fit the 2 x p distinct regression models
       varbvs_vopt_result = 
         epwpl::wpl_varbvs(data_mat, 
@@ -358,5 +357,5 @@ progressr::with_progress({
 
 
 
-  
+
 

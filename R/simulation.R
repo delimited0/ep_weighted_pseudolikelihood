@@ -104,7 +104,7 @@ score_combo_graphs = function(estimates1, estimates2, w1,
 }
 
 incl_prob_model = function(method = "method", graph, individual, simulation, 
-                           covariate, p) {
+                           covariate, p, w1 = 1) {
   
   data.table(
     method = method,
@@ -113,8 +113,87 @@ incl_prob_model = function(method = "method", graph, individual, simulation,
     individual = individual,
     simulation = simulation,
     covariate = covariate,
-    p = p
+    p = p,
+    weight1 = w1
   )
+}
+
+#' @export
+incl_prob_123 = function(estimates, symmetrizer = mean_symmetrize) {
+  
+  n_individuals = length(estimates$individuals)
+  p = estimates$p
+  
+  ip_table = rbindlist(lapply(1:n_individuals, function(i) {
+    est = estimates$individuals[[i]]
+    est_graph = symmetrizer(est$graph)
+    # est_graph = est$graph
+    
+    data.table(
+      method = estimates$method_name,
+      incl_prob_12 = est_graph[1, 2],
+      incl_prob_13 = est_graph[1, 3],
+      individual = i,
+      covariate = est$covariates,
+      p = p,
+      weight1 = 1
+    )
+  }))
+  
+  return(ip_table)
+}
+
+#' @export
+incl_prob_123_combo = function(estimates1, estimates2, w1,
+                               symmetrizer = mean_symmetrize) {
+  
+  n_individuals = length(estimates1$individuals)
+  p = estimates1$p
+  
+  score_table = rbindlist(lapply(1:n_individuals, function(i) {
+    
+    est1 = estimates1$individuals[[i]]
+    est2 = estimates2$individuals[[i]]
+    combo_graph = w1 * est1$graph + (1-w1) * est2$graph
+    est_graph = symmetrizer(combo_graph)
+    
+    data.table(
+      method = paste0(w1, "_", estimates1$method_name, "+", 
+                      1-w1, "_", estimates2$method_name),
+      incl_prob_12 = est_graph[1, 2],
+      incl_prob_13 = est_graph[1, 3],
+      individual = i,
+      covariate = est1$covariates,
+      p = p,
+      weight1 = w1
+    )
+  }))
+  
+  return(score_table)
+}
+
+alpha_123 = function(estimates, symmetrizer = mean_symmetrize) {
+  n_individuals = length(estimates$individuals)
+  p = estimates$p
+  
+  ip_table = rbindlist(lapply(1:n_individuals, function(i) {
+    
+    est = estimates$individuals[[i]]
+    
+    data.table(
+      method = estimates$method_name,
+      alpha_12 = est$fits[[2]]$alpha[1, ],
+      alpha_13 = est$fits[[3]]$alpha[1, ],
+      w_12 = est$fits[[2]]$w,
+      w_13 = est$fits[[3]]$w,
+      logodds_12 = est$fits[[2]]$logodds,
+      logodds_13 = est$fits[[3]]$logodds,
+      individual = i,
+      covariate = est$covariates,
+      p = p,
+      weight1 = 1
+    )
+  }))
 }
 
 #' @export
