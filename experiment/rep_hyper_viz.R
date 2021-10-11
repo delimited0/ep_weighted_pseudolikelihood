@@ -1,3 +1,10 @@
+args = commandArgs(trailingOnly = TRUE)
+input_path = args[1]
+output_path = args[2]
+
+# input_path = "data/hyper_avg/continuous_small/"
+# output_path = "small_p_grid/"
+
 library(ggplot2)
 library(data.table)
 
@@ -8,7 +15,8 @@ method_levels =
 
 # Discrete covariate, independent -----------------------------------------
 
-metrics = readRDS("data/hyper_avg/discrete_independent.RDS")
+# metrics = readRDS("data/hyper_avg/discrete_independent.RDS")
+metrics = readRDS(paste0(input_path, "discrete_independent.RDS"))
 
 metrics_long = melt(metrics, 
                     id.vars = c("method", "individual", 
@@ -25,12 +33,11 @@ plt = ggplot(metrics_long, aes(x = value, fill = method)) +
 plt
 
 filename = paste0(Sys.Date(), "_discrete_independent_boxplot.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg", width = 6, height = 4)
-
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 # No covariates -----------------------------------------------------------
 
-metrics = readRDS("data/hyper_avg/no_covariate.RDS")
+metrics = readRDS(paste0(input_path, "no_covariate.RDS"))
 
 metrics_long = melt(metrics, 
                     id.vars = c("method", "individual", 
@@ -47,11 +54,11 @@ plt = ggplot(metrics_long, aes(x = value, fill = method)) +
 plt
 
 filename = paste0(Sys.Date(), "_no_covariate_boxplot.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg", width = 6, height = 4)
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 
 # Discrete Dependent ------------------------------------------------------
-paths = dir("data/hyper_avg/", full.names = TRUE)
+paths = dir(input_path, full.names = TRUE)
 metrics = 
   rbindlist(lapply(paths[stringr::str_detect(paths, "discrete_dependent_p=*")],
                    function(x) readRDS(x)))
@@ -71,7 +78,7 @@ plt = ggplot(metrics_long, aes(x = value, fill = method, linetype = as.factor(co
 plt
 
 filename = paste0(Sys.Date(), "_discrete_dependent_boxplot.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg", width = 6, height = 4)
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 # Continuous covariate --------------------------------------------------------------
 
@@ -103,27 +110,30 @@ Z = c(seq(-0.99, -0.331, (-.331+.99)/59),
 Z = matrix(Z, n, 1)
 
 # read the full results
-paths = dir("data/hyper_avg/continuous/", full.names = TRUE)
-ep_paths = paths[stringr::str_detect(paths, "ep_")]
-varbvs_paths = paths[stringr::str_detect(paths, "varbvs_")]
+# paths = dir(paste0(input_path, "/continuous"), full.names = TRUE)
+# ep_paths = paths[stringr::str_detect(paths, "ep_")]
+# varbvs_paths = paths[stringr::str_detect(paths, "varbvs_")]
+# 
+# ep_results = lapply(ep_paths, readRDS)
+# varbvs_results = lapply(varbvs_paths, readRDS)
+# 
+# n_sim = length(ep_results)
+# 
+# metrics = rbindlist(
+#   mapply(function(ep_sim_results, varbvs_sim_results) {
+#     
+#     rbind(
+#       epwpl::incl_prob_123(ep_sim_results),
+#       epwpl::incl_prob_123(varbvs_sim_results),
+#       epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .25),
+#       epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .5),
+#       epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .75)
+#     )
+#   }, ep_results, varbvs_results, SIMPLIFY = FALSE)
+# )
 
-ep_results = lapply(ep_paths, readRDS)
-varbvs_results = lapply(varbvs_paths, readRDS)
-
-n_sim = length(ep_results)
-
-metrics = rbindlist(
-  mapply(function(ep_sim_results, varbvs_sim_results) {
-    
-    rbind(
-      epwpl::incl_prob_123(ep_sim_results),
-      epwpl::incl_prob_123(varbvs_sim_results),
-      epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .25),
-      epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .5),
-      epwpl::incl_prob_123_combo(ep_sim_results, varbvs_sim_results, .75)
-    )
-  }, ep_results, varbvs_results, SIMPLIFY = FALSE)
-)
+# read batched results
+metrics = readRDS(paste0(input_path, "continuous.RDS"))
 
 precisions = rbindlist(
   lapply(Z, function(z) {
@@ -158,7 +168,7 @@ plt = ggplot(agg_metrics, aes(x = individual, y = mean_incl_prob_12)) +
   geom_path(data = precisions, aes(x=individual, y=prec_12)) +
   theme_bw()
 filename = paste0(Sys.Date(), "_continuous_prec12.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg/", width = 6, height = 4)
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 plt = ggplot(agg_metrics, aes(x = individual, y = mean_incl_prob_13)) +
   geom_point(shape = 20) +
@@ -168,7 +178,7 @@ plt = ggplot(agg_metrics, aes(x = individual, y = mean_incl_prob_13)) +
   geom_path(data = precisions, aes(x = individual, y = prec_13)) +
   theme_bw()
 filename = paste0(Sys.Date(), "_continuous_prec13.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg/", width = 6, height = 4)
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 # why are the results so weird? Look at the raw data
 raw_metrics = metrics[method %in% c("ss_ep2", "varbvs"), 
@@ -179,7 +189,7 @@ plt = ggplot(melt(raw_metrics, id.vars = c("method", "individual")),
   facet_grid(rows = vars(method), cols = vars(variable)) +
   theme_bw()
 filename = paste0(Sys.Date(), "_continuous_diagnostic.pdf")
-ggsave(filename, plt, "pdf", path = "output/hyperparam_avg/", width = 6, height = 4)
+ggsave(filename, plt, "pdf", path = output_path, width = 6, height = 4)
 
 ## prior inclusion diagnostic -------------------------------------------
 
@@ -219,7 +229,7 @@ ggplot(data = precisions, aes(x=individual, y=prec_12)) +
 
 metrics_12 = metrics[, c("alpha_12", "logodds_12", "individual")]
 
-ggplot(metrics_12, aes(x = individual, y = alpha_12, color = logodds_12)) + 
-  geom_hex()
+# ggplot(metrics_12, aes(x = individual, y = alpha_12, color = logodds_12)) + 
+#   geom_hex()
   
   
