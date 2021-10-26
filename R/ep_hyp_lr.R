@@ -9,7 +9,7 @@
 #'
 #' uniform discrete grid hyperprior
 #' assume prior logodds all the same for now
-epvbs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
+epbvs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200, 
                  delta = 1e-4, k = .99, damping = .5, 
                  woodbury = FALSE, opt = TRUE, opt_method = "Nelder-Mead",
                  method = "ep2", verbose = FALSE,

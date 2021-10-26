@@ -33,7 +33,7 @@ v_noise = 1
 v_slab = 3
 # p_incl_grid = seq(1, p) / (p+1)
 # p_incl_grid = seq(.3, .7, .1)
-p_incl_grid = seq(.05, .25, .05)
+p_incl_grid = seq(.1, .5, .05)
 # p_incl_grid = .5
 n_pip = length(p_incl_grid)
 
@@ -71,7 +71,7 @@ result_fix = epwpl::epvbs(data_mat, weight_mat_fit,
                           theta$v_slab, 
                           theta$p0, opt=FALSE, verbose=FALSE,
                           damping = .9, k = .99,
-                          method="gss")
+                        )
 tictoc::toc()
 
 tictoc::tic()
@@ -107,7 +107,7 @@ result_opt = epwpl::wpl_ep_gss(data_mat, weight_mat_fit,
                            opt_upper = c(1000, Inf))
 
 tictoc::tic()
-result_opt = epwpl::wpl_ep(data_mat, weight_mat_fit, 
+result_opt = epwpl::wpl_ep(data_mat, weight_mat_fit,  
                            rep(v_noise, n_pip), 
                            rep(v_slab, n_pip), 
                            p_incl_grid,

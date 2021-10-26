@@ -232,13 +232,15 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   tXX = t(X) %*% X
   In = diag(n)
   
+  hyper_opt = NULL
+  
   # first updates ----
   
   # third factor
   p_site3 = qlogis(p_incl)
   
   # second factor
-  v_site2 = p_incl * v_slab * rep(1, d)
+  v_site2 = p_incl * v_noise*v_slab * rep(1, d)
   
   # first factor
   V_site2 = diag(v_site2)
@@ -259,16 +261,24 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     v_noise = params[1]
     v_slab = params[2]
     
+    if (woodbury) {
+      log_alpha = determinant(In + (XV_tX / v_noise))$modulus
+    }
+    else {
+      log_alpha = determinant(diag(d) + (VtXX / v_noise))$modulus
+    }
+    
     logs1 = .5*(
       tmVm + (tmtXy / v_noise) - n*log(2*pi * v_noise) - (yty / v_noise) -
         tms2Vms2 -
-        determinant(In + (XV_tX / v_noise))$modulus + 
+        # determinant(In + (XV_tX / v_noise))$modulus + 
+        log_alpha +
         sum(log1p(v_site2 / v_site1)) + 
         sum_pmv3
     )
     
     logc = log_sum_exp(
-      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_noise*v_slab), log = TRUE),
       plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
     )
     
@@ -293,13 +303,13 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     return(-value)
   }
   
-  if (opt_method == "L-BFGS-B") {
+  if (opt_method %in% c("L-BFGS-B", "Rcgmin", "Rvmmin")) {
     grad = function(params) {
       v_noise = params[1]
       v_slab = params[2]
       
       cons = 
-        plogis(p_site3) * dnorm(0, m_site1, v_site1 + v_slab) +
+        plogis(p_site3) * dnorm(0, m_site1, v_site1 + v_noise*v_slab) +
         plogis(-p_site3) * dnorm(0, m_site1, v_site1)
       
       if (woodbury) {
@@ -310,8 +320,8 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
       }
       dlogs1_dvnoise = -.5 * tmtXy / v_noise^2 - .5 * yty - .5 * n / v_noise
       dlogs2_dvslab = .5 * sum( 
-        cons^(-1) * dnorm(0, m_site1, v_site1 + v_slab) * 
-          (m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab^2)
+        cons^(-1) * dnorm(0, m_site1, v_site1 + v_noise*v_slab) * 
+          (m_site1^2 - v_site1 - v_noise*v_slab) / (v_site1 + v_noise^2*v_slab^2)
       )
       
       return(c(
@@ -325,16 +335,14 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   
   while (!converged & iter < max_iter) {
     
-    if (any(v_site1 < 0))
-      browser()
-    
     # second factor
-    p_site2_new = .5*log(v_site1) - .5*log(v_site1 + v_slab) + 
-      .5 * m_site1^2 * ( (1 / v_site1) - (1 / (v_site1 + v_slab)) )
+    p_site2_new = .5*log(v_site1) - .5*log(v_site1 + v_noise*v_slab) + 
+      .5 * m_site1^2 * ( (1 / v_site1) - (1 / (v_site1 + v_noise*v_slab)) )
     
-    a = plogis(p_site2_new + p_site3) * (m_site1 / (v_site1 + v_slab)) +
+    a = plogis(p_site2_new + p_site3) * (m_site1 / (v_site1 + v_noise*v_slab)) +
       plogis(-p_site2_new - p_site3) * (m_site1 / v_site1)
-    b = plogis(p_site2_new + p_site3) * ((m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab)^2) +
+    b = plogis(p_site2_new + p_site3) * ((m_site1^2 - v_site1 - v_noise*v_slab) /
+                                           (v_site1 + v_noise*v_slab)^2) +
       plogis(-p_site2_new - p_site3) * ((m_site1 / v_site1)^2 - (1 / v_site1))
     
     v_site2_new = (1 / (a^2 - b)) - v_site1
@@ -347,11 +355,12 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     # overall approximation
     V_site2 = diag(as.vector(v_site2_new))
     V_site2_inv = diag(1 / as.vector(v_site2_new))
-    XV_tX = X %*% V_site2 %*% t(X)
-    if (woodbury) 
-      V = V_site2 - V_site2 %*% t(X) %*% 
-      solve( v_noise*In + XV_tX, X %*% V_site2 )
+    if (woodbury) {
+      XV_tX = X %*% V_site2 %*% t(X)
+      V = V_site2 - V_site2 %*% t(X) %*% solve( v_noise*In + XV_tX, X %*% V_site2 )
+    }
     else {
+      VtXX = V_site2 %*% tXX
       V = solve(V_site2_inv + (tXX / v_noise))
     }
     
@@ -382,9 +391,6 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     m_site1 = m_site1_damp
     
     # check convergence
-    if (any(is.na(p))) {
-      browser()  
-    }
     if (max(abs(p - p_old)) < delta) {
       converged = TRUE
     }
@@ -407,6 +413,11 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
                                   fn = mlik,
                                   lower = lb, upper = ub)
       }
+      else if (opt_method == "Hooke-Jeeves") {
+        hyper_opt = dfoptim::hjkb(par = c(v_noise, v_slab),
+                                  fn = mlik,
+                                  lower = lb, upper = ub)
+      }
       else if (opt_method == "L-BFGS-B") {
         # hyper_opt = optim(par = c(v_noise, v_slab), fn = mlik, gr = grad,
         #                   lower = lb, upper = ub, 
@@ -421,10 +432,16 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
                                   fn = mlik,
                                   lower = lb, upper = ub)
       }
+      else if (opt_method %in% c("Rcgmin", "Rvmmin")) {
+        hyper_opt = optimr::optimr(par = c(v_noise, v_slab),
+                                   fn = mlik,
+                                   gr = grad,
+                                   lower = lb, upper = ub,
+                                   method = opt_method)
+      }
       else {
         stop("Invalid optimization method")
       }
-      
       
       v_noise = hyper_opt$par[1]
       v_slab = hyper_opt$par[2]
@@ -439,6 +456,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
   result = list(
     m = m,
     v = v,
+    V = V,
     logisp = p,
     p = plogis(p),
     iters = iter,

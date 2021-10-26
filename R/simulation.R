@@ -103,6 +103,42 @@ score_combo_graphs = function(estimates1, estimates2, w1,
   return(score_table)
 }
 
+score_likwgt_graphs = function(estimates1, estimates2, 
+                               true_graphs, threshold = .5,
+                               symmetrizer = mean_symmetrize) {
+  n_individuals = length(estimates1$individuals)
+  p = estimates1$p
+  
+  score_table = rbindlist(lapply(1:n_individuals, function(i) {
+    
+    est1 = estimates1$individuals[[i]]
+    est2 = estimates2$individuals[[i]]
+    
+    lliks = data.table(
+      est1 = rowMeans(est1$llik),
+      est2 = rowMeans(est2$llik)
+    )
+    
+    
+    
+    combo_graph = w1 * est1$graph + (1-w1) * est2$graph
+    tg = true_graphs[[i]]
+    est_graph = 1 * (symmetrizer(combo_graph) > threshold)
+    
+    data.table(
+      method = paste0(estimates1$method_name, "+", estimates2$method_name),
+      sensitivity = sum(est_graph & tg) / sum(tg),
+      specificity = sum(!est_graph & !tg) / sum(!tg),
+      individual = i,
+      covariate = est1$covariates,
+      p = p,
+      weight1 = w1
+    )
+  }))
+  
+  return(score_table)
+}
+
 incl_prob_model = function(method = "method", graph, individual, simulation, 
                            covariate, p, w1 = 1) {
   
