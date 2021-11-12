@@ -96,7 +96,7 @@ metrics = foreach(i = 1:nrow(settings), .combine = rbind, .errorhandling = 'remo
                       v_slab_grid = v_slab,
                       p_incl_grid = p_incl_grid,
                       opt = TRUE)
-  
+
   ep_vopt_result =
     epwpl::wpl_ep(data_mat,
                   covariates = covariates_levels, tau = tau, weight_mat = weight_mat,
@@ -105,8 +105,9 @@ metrics = foreach(i = 1:nrow(settings), .combine = rbind, .errorhandling = 'remo
                   p_incl_grid = p_incl_grid,
                   damping = ep_damping, k = .99,
                   opt = TRUE,
-                  opt_method = "L-BFGS-B",
-                  lb = c(1e-5, 1e-5))
+                  woodbury = FALSE,
+                  lb = 1e-6, 
+                  opt_method = "Nelder-Mead")
   
   lapply(ep_vopt_result$individuals, function(indiv) {
     colSums(sapply(indiv$fits, function(fit) {

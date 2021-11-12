@@ -28,6 +28,8 @@ epbvs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
   post_incls = matrix(NA, p, ns)
   mu_mat = matrix(NA, p, ns)
   v_mat = matrix(NA, p, ns)
+  # v_site2 = matrix(NA, p, ns)
+  Cov = array(NA, dim = c(p, p, ns))
   
   sigma_vec = rep(NA, ns)
   sa_vec = rep(NA, ns)
@@ -73,7 +75,9 @@ epbvs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
       mliks[i] = fit$llik
       post_incls[, i] = fit$p
       mu_mat[, i] = fit$m
-      v_mat[, i] = fit$v  
+      v_mat[, i] = fit$v
+      # v_site2[, i] = fit$v_site2
+      Cov[, , i] = fit$Cov
     }
     else if (method == "gss") {
       mliks[i] = fit$evidence
@@ -99,6 +103,7 @@ epbvs = function(X, y, sigma, sa, logodds, v_inf = 100, max_iter = 200,
     alpha = post_incls,
     mu = mu_mat,
     v = v_mat,
+    Cov = Cov,
     pip = pip,
     beta = beta,
     weights = weights,
