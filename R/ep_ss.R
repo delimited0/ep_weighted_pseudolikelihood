@@ -267,7 +267,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     
     if (woodbury) {
       log_alpha = determinant(In + (XV_tX / v_noise))$modulus
-      # L = chol(In + (XV_tX / v_noise), )
+      # L = chol(In + (XV_tX / v_noise))
       # log_alpha = 2 * sum(log(diag(L)))
       # log_alpha = determinant(In + (XV_tX / exp(log_v_noise)))$modulus
     }
@@ -288,7 +288,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     )
     
     logc = log_sum_exp(
-      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_noise*v_slab), log = TRUE),
       # plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + exp(log_v_slab)), log = TRUE),
       plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
     )
@@ -320,9 +320,13 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     
     if (woodbury) {
       log_alpha = determinant(In + (XV_tX / v_noise))$modulus
+      # L = chol(In + (XV_tX / v_noise))
+      # log_alpha = 2 * sum(log(diag(L)))
     }
     else {
       log_alpha = determinant(diag(d) + (VtXX / v_noise))$modulus
+      # L = chol(diag(d) + (VtXX / v_noise))
+      # log_alpha = 2 * sum(log(diag(L)))
     }
     
     logs1 = .5*(
@@ -332,7 +336,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     )
     
     logc = log_sum_exp(
-      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_slab), log = TRUE),
+      plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + v_noise*v_slab), log = TRUE),
       # plogis(p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1 + exp(log_v_slab)), log = TRUE),
       plogis(-p_site3, log.p = TRUE) + dnorm(0, m_site1, sqrt(v_site1), log = TRUE)
     )
@@ -350,7 +354,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
       # log_v_slab = params[2]
       
       cons = 
-        plogis(p_site3) * dnorm(0, m_site1, v_site1 + v_slab) +
+        plogis(p_site3) * dnorm(0, m_site1, v_site1 + v_noise*v_slab) +
         plogis(-p_site3) * dnorm(0, m_site1, v_site1)
       
       if (woodbury) {
@@ -363,8 +367,8 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
       }
       dlogs1_dvnoise = -.5 * tmtXy / v_noise^2 - .5 * yty - .5 * n / v_noise
       dlogs2_dvslab = .5 * sum( 
-        cons^(-1) * dnorm(0, m_site1, v_site1 + v_slab) * 
-          (m_site1^2 - v_site1 - v_slab) / (v_site1 + v_slab)^2
+        cons^(-1) * dnorm(0, m_site1, v_site1 + v_noise*v_slab) * 
+          (m_site1^2 - v_site1 - v_noise*v_slab) / (v_site1 + v_noise*v_slab)^2
       )
       
       return(c(
@@ -542,7 +546,7 @@ ep_ss2 = function(X, y, v_noise, v_slab, p_incl, v_inf = 100, max_iter = 200,
     iter = iter + 1
   }
   
-  mlik_value = -mlik(c(v_noise, v_slab))
+  mlik_value = -mlik(c(v_noise, v_noise*v_slab))
   
   result = list(
     m = m,

@@ -11,4 +11,9 @@ log1mexp = function(a) {
   else 
     log(-expm1(a))
 }
+# 
+# log_subtract = function(x, y) {
+#   if (x <= y)
+#     
+# }
 

@@ -106,7 +106,7 @@ metrics = foreach(i = 1:nrow(settings), .combine = rbind, .errorhandling = 'remo
                   damping = ep_damping, k = .99,
                   opt = TRUE,
                   woodbury = FALSE,
-                  lb = 1e-6, 
+                  lb = 1e-6,
                   opt_method = "Nelder-Mead")
   
   lapply(ep_vopt_result$individuals, function(indiv) {

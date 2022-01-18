@@ -371,14 +371,16 @@ log_joint_prob = function(X, weight_mat, beta_samples, gamma_samples,
                           v_noise, v_slab) {
   
   n = nrow(weight_mat)
+  
   sqrt_weight = sqrt(weight_mat)
   p = ncol(X)
   
   for (l in 1:n) {
+    
     for (tgt_idx in 1:p) {
       
-      target = data_mat[, tgt_idx] * sqrt_weight[l, ]
-      preds = data_mat[, -tgt_idx] * sqrt_weight[l, ]
+      target = X[, tgt_idx] * sqrt_weight[l, ]
+      preds = X[, -tgt_idx] * sqrt_weight[l, ]
       beta_preds = beta[-tgt_idx]
       
       dnorm(target, preds %*% beta_preds, )

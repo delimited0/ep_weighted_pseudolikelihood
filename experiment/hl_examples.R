@@ -27,10 +27,6 @@ tictoc::tic()
 result_epss2 = epwpl::ep_ss2(X, y, v_noise, v_slab, p0,
                              damping=.9, k=.99, opt=TRUE,
                              opt_method = "Nelder-Mead")
-# result_epss2 = epwpl::ep_ss2(X, y, v_noise, v_slab, p0,
-#                              damping=.9, k=.99, opt=TRUE,
-#                              opt_method = "L-BFGS-B",
-#                              woodbury = TRUE)
 tictoc::toc()
 
 
@@ -57,6 +53,13 @@ result_varbvs = varbvs::varbvs(X = X, y = y, Z = NULL, family = "gaussian",
                                sigma = v_noise, sa = v_slab, logodds = qlogis(p0),
                                update.sigma = TRUE, update.sa = TRUE)
 tictoc::toc()
+
+# alpha u2g
+alpha = .5
+result_alpha = epwpl::alpha_ss(X, y, alpha, v_noise, v_slab, p0, 
+                               n_div = 10, lr = .0001)
+
+result_l0 = epwpl::l0_ss(X, y, v_noise, v_slab, p0, lr = .005, n_elbo = 10)
 
 epwpl::normalizelogweights(c(result_varbvs$logw, result_vb$elbo))
 
@@ -197,17 +200,17 @@ p0 = .1
 v_slab = .1
 
 tictoc::tic()
+# result = epwpl::ep_ss2(X, y, v_noise, v_slab, .1,
+#                        opt=TRUE,
+#                        woodbury = FALSE,
+#                        opt_method = "L-BFGS-B")
 result = epwpl::ep_ss2(X, y, v_noise, v_slab, .1,
                        opt=TRUE,
                        woodbury = FALSE,
-                       opt_method = "UOBYQA")
-# result = epwpl::ep_ss2(X, y, v_noise, v_slab, .1, 
-#                        opt=TRUE, 
-#                        woodbury = FALSE,
-#                        opt_method = "Nelder-Mead")
+                       opt_method = "Nelder-Mead")
 tictoc::toc()
 
-result
+plot(result$p)
 
 tictoc::tic()
 gss_result = epwpl::GroupSpikeAndSlab(X, y, 
@@ -222,6 +225,11 @@ tictoc::toc()
 tictoc::tic()
 result_vb = epwpl::vb_ss(X, y, v_noise, v_slab, p0, opt=TRUE)
 tictoc::toc()
+
+# alpha u2g
+alpha = .5
+result_alpha = epwpl::alpha_ss(X, y, alpha, v_noise, v_slab, p0, max_iter = 1,
+                               n_div = 10, lr = .004)
 
 ## ep with grid prior and importance sampling ----
 n_grid = 50
